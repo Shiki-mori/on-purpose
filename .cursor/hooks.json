@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": ".cursor/hooks/extension_guard.py session"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": ".cursor/hooks/extension_guard.py pre-tool",
+        "matcher": "Write|StrReplace|Edit|ApplyPatch"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": ".cursor/hooks/extension_guard.py post-tool",
+        "matcher": "Write|StrReplace|Edit|ApplyPatch"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/extension_guard.py shell"
+      }
+    ]
+  }
+}

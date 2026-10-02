@@ -1,0 +1,29 @@
+---
+description: Chrome 扩展的脚本、存储、计时和消息约束。
+globs: extension/**/*.js,extension/**/*.html,extension/**/*.css,extension/**/*.json
+alwaysApply: false
+---
+
+# 扩展结构
+
+Manifest V3。不引入打包工具，不写 `package.json`。脚本不用 `import` / `export`，共享名字挂在 `globalThis.OP`。
+
+- 服务工作线程用 `importScripts` 载入共享文件，路径相对于 `src/background/service-worker.js`。
+- 内容脚本按此顺序注入：`constants.js`、`sites/bilibili.js`、`sites/index.js`、`content/ui.js`、`content/content-script.js`。隔离世界，`all_frames` 为 false，`run_at` 为 `document_start`。
+- 弹出页只用 `script` 标签载入 `constants.js` 和 `time.js`。弹出页和内容脚本不调用 `chrome.storage`，也不载入 `storage.js`。
+- 只有服务工作线程写存储、设闹钟、关闭标签页。`service-worker.js` 管启动、闹钟和标签页关闭；`runtime.js` 管消息。状态写进存储，内存只作当次缓存。
+- 本地键 `localState`，会话键 `sessionState`。用 `sender.tab.id` 识别标签页，不信任消息体里的标签页 id。
+- 扩展不发起网络请求。新记录、新目的、新选项的 id 用 `crypto.randomUUID()`。播种 id 用任务书里的固定值。
+- 名称和分钟数在服务工作线程校验。写入失败不关闭询问或打断窗口，提示「没能保存，请再试一次」；此时不执行「关闭当前标签页」。
+- 共用计时只用 `chrome.alarms` 和 `Date.now()`。不用 `performance.now()`，也不用页面或服务工作线程里的定时器担任共用计时。关掉打断窗口后的 5 秒放在该页内容脚本的 `setTimeout`。
+- 认网址和暂停播放只走 `OP.findSite` 与 `src/sites/bilibili.js`。
+
+```js
+// 错误：内容脚本里直接读存储，或使用 ES Module
+import { findSite } from "../sites/index.js";
+chrome.storage.local.get("localState");
+
+// 正确
+const site = globalThis.OP.findSite(location.href);
+chrome.runtime.sendMessage({ type: "content-ready", url: location.href });
+```
