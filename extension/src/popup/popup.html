@@ -10,8 +10,16 @@
     <main>
       <section>
         <h2>间隔</h2>
-        <p><span id="first-label"></span> <span id="first-value"></span></p>
-        <p><span id="again-label"></span> <span id="again-value"></span></p>
+        <div class="interval">
+          <label id="first-label" for="first-minutes"></label>
+          <input id="first-minutes" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
+          <p id="first-error" class="row-error" hidden></p>
+        </div>
+        <div class="interval">
+          <label id="again-label" for="again-minutes"></label>
+          <input id="again-minutes" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
+          <p id="again-error" class="row-error" hidden></p>
+        </div>
       </section>
       <section>
         <h2>目的</h2>
@@ -19,6 +27,14 @@
       </section>
       <section>
         <h2>打断选项</h2>
+        <form id="option-form">
+          <label id="option-add-label" for="option-name">添加打断选项</label>
+          <div class="option-add">
+            <input id="option-name" type="text" autocomplete="off">
+            <button type="submit">添加</button>
+          </div>
+          <p id="option-add-error" class="row-error" hidden></p>
+        </form>
         <ul id="options"></ul>
       </section>
       <section>

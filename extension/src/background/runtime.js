@@ -69,16 +69,20 @@ function queryTabs() {
   });
 }
 
-function notifyListsChanged(purposes) {
+function notifyListsChanged(purposes, interruptOptions) {
   return queryTabs().then(function (tabs) {
     tabs.forEach(function (tab) {
       if (typeof tab.id !== "number" || !isBilibiliTab(tab)) {
         return;
       }
-      chrome.tabs.sendMessage(tab.id, {
+      var message = {
         type: OP.MESSAGE.listsChanged,
         purposes: purposes
-      }, function () {
+      };
+      if (interruptOptions) {
+        message.interruptOptions = interruptOptions;
+      }
+      chrome.tabs.sendMessage(tab.id, message, function () {
         void chrome.runtime.lastError;
       });
     });
@@ -95,6 +99,19 @@ function nextOrder(items) {
     }
   });
   return max + 1;
+}
+
+function findOption(options, id) {
+  var index;
+  if (!Array.isArray(options)) {
+    return null;
+  }
+  for (index = 0; index < options.length; index += 1) {
+    if (options[index].id === id) {
+      return options[index];
+    }
+  }
+  return null;
 }
 
 function findPurpose(purposes, id) {
@@ -307,6 +324,124 @@ function savePurposes(next) {
   });
 }
 
+function saveOptions(next) {
+  var options = copyList(next.interruptOptions);
+  var purposes = copyList(next.purposes || []);
+  return OP.writeLocal(next).then(function () {
+    return notifyListsChanged(purposes, options).then(function () {
+      return { ok: true, interruptOptions: options };
+    });
+  });
+}
+
+function settingsFrom(local) {
+  return {
+    firstIntervalMinutes: local.settings.firstIntervalMinutes,
+    againIntervalMinutes: local.settings.againIntervalMinutes
+  };
+}
+
+OP.handleSettingsSet = function (message) {
+  return enqueue(function () {
+    var hasFirst = Boolean(message) && Object.prototype.hasOwnProperty.call(message, "firstIntervalMinutes");
+    var hasAgain = Boolean(message) && Object.prototype.hasOwnProperty.call(message, "againIntervalMinutes");
+    if (hasFirst === hasAgain) {
+      return fail();
+    }
+    var check = OP.parseMinutes(hasFirst ? message.firstIntervalMinutes : message.againIntervalMinutes);
+    if (!check.ok) {
+      return fail(check.error);
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      if (!next.settings || typeof next.settings !== "object") {
+        return fail();
+      }
+      if (hasFirst) {
+        next.settings.firstIntervalMinutes = check.minutes;
+      } else {
+        next.settings.againIntervalMinutes = check.minutes;
+      }
+      return OP.writeLocal(next).then(function () {
+        return { ok: true, settings: settingsFrom(next) };
+      });
+    });
+  }).catch(function () {
+    return fail();
+  });
+};
+
+OP.handleOptionAdd = function (message) {
+  return enqueue(function () {
+    var check = OP.normalizeName(message && message.name);
+    if (!check.ok) {
+      return fail(check.error);
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      if (!Array.isArray(next.interruptOptions)) {
+        return fail();
+      }
+      next.interruptOptions.push({
+        id: crypto.randomUUID(),
+        name: check.name,
+        order: nextOrder(next.interruptOptions),
+        locked: false,
+        closesTab: false
+      });
+      return saveOptions(next);
+    });
+  }).catch(function () {
+    return fail();
+  });
+};
+
+OP.handleOptionUpdate = function (message) {
+  return enqueue(function () {
+    var check = OP.normalizeName(message && message.name);
+    if (!check.ok) {
+      return fail(check.error);
+    }
+    var id = message && typeof message.id === "string" ? message.id : "";
+    if (!id) {
+      return fail();
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      var option = findOption(next.interruptOptions, id);
+      if (!option || option.locked) {
+        return fail();
+      }
+      option.name = check.name;
+      return saveOptions(next);
+    });
+  }).catch(function () {
+    return fail();
+  });
+};
+
+OP.handleOptionDelete = function (message) {
+  return enqueue(function () {
+    var id = message && typeof message.id === "string" ? message.id : "";
+    if (!id) {
+      return fail();
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      var option = findOption(next.interruptOptions, id);
+      if (!option || option.locked) {
+        return fail();
+      }
+      next.interruptOptions = next.interruptOptions.filter(function (item) {
+        return item.id !== option.id;
+      });
+      return saveOptions(next);
+    });
+  }).catch(function () {
+    return fail();
+  });
+};
+
 OP.handlePurposeUpdate = function (message) {
   return enqueue(function () {
     var check = OP.normalizeName(message && message.name);
@@ -422,6 +557,18 @@ handlers[OP.MESSAGE.purposeUpdate] = function (message) {
 };
 handlers[OP.MESSAGE.purposeDelete] = function (message) {
   return OP.handlePurposeDelete(message);
+};
+handlers[OP.MESSAGE.settingsSet] = function (message) {
+  return OP.handleSettingsSet(message);
+};
+handlers[OP.MESSAGE.optionAdd] = function (message) {
+  return OP.handleOptionAdd(message);
+};
+handlers[OP.MESSAGE.optionUpdate] = function (message) {
+  return OP.handleOptionUpdate(message);
+};
+handlers[OP.MESSAGE.optionDelete] = function (message) {
+  return OP.handleOptionDelete(message);
 };
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {

@@ -80,34 +80,71 @@ ul {
   list-style: none;
 }
 
-.purpose + .purpose {
+.interval + .interval {
+  margin-top: 8px;
+}
+
+.interval label,
+#option-add-label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.interval input {
+  width: 8rem;
+}
+
+#option-form {
+  margin-bottom: 8px;
+}
+
+.option-add {
+  display: flex;
+  gap: 6px;
+}
+
+.option-add input {
+  flex: 1;
+  width: 0;
+}
+
+.purpose + .purpose,
+.option + .option {
   margin-top: 8px;
 }
 
 .purpose-view,
 .purpose-editor,
-.purpose-actions {
+.purpose-actions,
+.option-view,
+.option-editor,
+.option-actions {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.purpose-name {
+.purpose-name,
+.option-name {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .purpose-actions,
-.purpose-editor button {
+.purpose-editor button,
+.option-actions,
+.option-editor button {
   flex-shrink: 0;
 }
 
-.purpose-editor {
+.purpose-editor,
+.option-editor {
   width: 100%;
 }
 
-.purpose-editor input {
+.purpose-editor input,
+.option-editor input {
   flex: 1;
   width: 0;
 }
