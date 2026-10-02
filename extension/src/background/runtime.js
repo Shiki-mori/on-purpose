@@ -252,7 +252,25 @@ function writeSessionOrRollback(local, session, record) {
   });
 }
 
+function snoozeIsActive(local) {
+  var until = local && local.snooze && local.snooze.until;
+  return typeof until === "number" && until > Date.now();
+}
+
+function snoozeSnapshot(local) {
+  var button = local && local.snoozeButton ? local.snoozeButton : {};
+  var until = local && local.snooze ? local.snooze.until : null;
+  return {
+    until: typeof until === "number" ? until : null,
+    xRatio: typeof button.xRatio === "number" ? button.xRatio : null,
+    yRatio: typeof button.yRatio === "number" ? button.yRatio : null
+  };
+}
+
 function planFirstInterval(session, local) {
+  if (snoozeIsActive(local)) {
+    return null;
+  }
   if (!mapEmpty(ensurePendingMap(session))) {
     return null;
   }
@@ -356,6 +374,9 @@ function readyBody(local, session, showPurpose, showInterrupt) {
     body.interruptOptions = copyList(local.interruptOptions || []);
     body.purposeContrast = contrastFor(local, session);
   }
+  if (local) {
+    body.snooze = snoozeSnapshot(local);
+  }
   return body;
 }
 
@@ -425,9 +446,6 @@ OP.handleContentReady = function (message, sender) {
       if (showInterrupt && !Object.prototype.hasOwnProperty.call(interrupt.pending, key)) {
         interrupt.pending[key] = true;
         changed = true;
-      }
-      if (!showPurpose && !showInterrupt) {
-        return { ok: true, showPurpose: false, showInterrupt: false };
       }
       return OP.ensureLocalState().then(function (local) {
         var saved = changed ? OP.writeSession(session) : Promise.resolve();
@@ -810,6 +828,9 @@ OP.handleTabRemoved = function (tabId) {
         }
         if (interrupt.active && mapEmpty(interrupt.pending)) {
           return OP.ensureLocalState().then(function (local) {
+            if (snoozeIsActive(local)) {
+              return OP.writeSession(next);
+            }
             var plan = armTimer(next, local, "again");
             return OP.writeSession(next).then(function () {
               return setTimerAlarm(plan.when);
@@ -818,6 +839,9 @@ OP.handleTabRemoved = function (tabId) {
         }
         if (hadPurpose && mapEmpty(purpose) && next.purposeAnswered && !interrupt.active && ensureTimer(next).mode !== "running") {
           return OP.ensureLocalState().then(function (local) {
+            if (snoozeIsActive(local)) {
+              return OP.writeSession(next);
+            }
             var plan = armTimer(next, local, "first");
             return OP.writeSession(next).then(function () {
               return setTimerAlarm(plan.when);
@@ -882,6 +906,9 @@ OP.handleInterruptCommit = function (message, sender) {
               return clearRound().catch(function () {
                 return rollbackRecord(next, record);
               });
+            }
+            if (snoozeIsActive(next)) {
+              return writeSessionOrRollback(next, session, record);
             }
             var plan = armTimer(session, next, "again");
             return writeSessionOrRollback(next, session, record).then(function () {
@@ -959,6 +986,12 @@ OP.handleTimerAlarm = function (alarm) {
         return clearTimerAlarm();
       }
       return OP.ensureLocalState().then(function (local) {
+        if (snoozeIsActive(local)) {
+          idleTimerFields(session);
+          return OP.writeSession(session).then(function () {
+            return clearTimerAlarm();
+          });
+        }
         var minutes = intervalMinutes(local, timer.intervalKind);
         if (typeof minutes !== "number") {
           return clearTimerAlarm();
@@ -1011,6 +1044,174 @@ OP.reconcileTimer = function () {
   });
 };
 
+function setSnoozeAlarm(when) {
+  return new Promise(function (resolve, reject) {
+    chrome.alarms.create(OP.ALARM_SNOOZE, { when: when }, function () {
+      var error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+function clearSnoozeAlarm() {
+  return new Promise(function (resolve) {
+    chrome.alarms.clear(OP.ALARM_SNOOZE, function () {
+      void chrome.runtime.lastError;
+      resolve();
+    });
+  });
+}
+
+function notifySnooze(snapshot) {
+  return queryTabs().then(function (tabs) {
+    bilibiliTabs(tabs).forEach(function (tab) {
+      if (typeof tab.id !== "number") {
+        return;
+      }
+      chrome.tabs.sendMessage(tab.id, {
+        type: OP.MESSAGE.snoozeSet,
+        snooze: snapshot
+      }, function () {
+        void chrome.runtime.lastError;
+      });
+    });
+  }).catch(function () {
+    return null;
+  });
+}
+
+function ratioInRange(value) {
+  return typeof value === "number" && isFinite(value) && value >= 0 && value <= 1;
+}
+
+OP.handleSnoozeSet = function (message) {
+  return enqueue(function () {
+    var check = OP.parseMinutes(message && message.minutes);
+    if (!check.ok) {
+      return fail(check.error);
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      if (!next.snooze || typeof next.snooze !== "object" || Array.isArray(next.snooze)) {
+        next.snooze = { until: null };
+      }
+      var until = Date.now() + check.minutes * 60 * 1000;
+      next.snooze.until = until;
+      return OP.writeLocal(next).then(function () {
+        return loadSession().then(function (session) {
+          idleTimerFields(session);
+          return OP.writeSession(session).then(function () {
+            return clearTimerAlarm();
+          }).then(function () {
+            return setSnoozeAlarm(until);
+          }).then(function () {
+            var snapshot = snoozeSnapshot(next);
+            return notifySnooze(snapshot).then(function () {
+              return { ok: true, snooze: snapshot };
+            });
+          });
+        });
+      });
+    });
+  }).catch(function () {
+    return fail();
+  });
+};
+
+OP.handleSnoozeMove = function (message) {
+  return enqueue(function () {
+    var xRatio = message && message.xRatio;
+    var yRatio = message && message.yRatio;
+    if (!ratioInRange(xRatio) || !ratioInRange(yRatio)) {
+      return fail();
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      next.snoozeButton = { xRatio: xRatio, yRatio: yRatio };
+      return OP.writeLocal(next).then(function () {
+        var snapshot = snoozeSnapshot(next);
+        return notifySnooze(snapshot).then(function () {
+          return { ok: true, snooze: snapshot };
+        });
+      });
+    });
+  }).catch(function () {
+    return fail();
+  });
+};
+
+OP.handleSnoozeAlarm = function (alarm) {
+  if (!alarm || alarm.name !== OP.ALARM_SNOOZE) {
+    return Promise.resolve();
+  }
+  return enqueue(function () {
+    return OP.ensureLocalState().then(function (local) {
+      var until = local && local.snooze ? local.snooze.until : null;
+      if (typeof until === "number" && until > Date.now() + 250) {
+        return setSnoozeAlarm(until);
+      }
+      var next = cloneState(local);
+      if (!next.snooze || typeof next.snooze !== "object" || Array.isArray(next.snooze)) {
+        next.snooze = { until: null };
+      }
+      next.snooze.until = null;
+      return OP.writeLocal(next).then(function () {
+        return clearSnoozeAlarm().then(function () {
+          return notifySnooze(snoozeSnapshot(next));
+        }).then(function () {
+          return queryTabs().then(function (tabs) {
+            var open = bilibiliTabs(tabs);
+            if (!open.length) {
+              return null;
+            }
+            return loadSession().then(function (session) {
+              return startInterruptRound(session, next, open, "snooze");
+            });
+          });
+        });
+      });
+    });
+  }).catch(function () {
+    return null;
+  });
+};
+
+OP.reconcileSnooze = function () {
+  return enqueue(function () {
+    return OP.ensureLocalState().then(function (local) {
+      var until = local && local.snooze ? local.snooze.until : null;
+      if (typeof until !== "number") {
+        return clearSnoozeAlarm();
+      }
+      if (until > Date.now()) {
+        return loadSession().then(function (session) {
+          var running = ensureTimer(session).mode === "running";
+          if (running) {
+            idleTimerFields(session);
+          }
+          var saved = running ? OP.writeSession(session) : Promise.resolve();
+          return saved.then(function () {
+            return clearTimerAlarm();
+          }).then(function () {
+            return setSnoozeAlarm(until);
+          });
+        });
+      }
+      var next = cloneState(local);
+      next.snooze.until = null;
+      return OP.writeLocal(next).then(function () {
+        return clearSnoozeAlarm();
+      });
+    });
+  }).catch(function () {
+    return null;
+  });
+};
+
 var handlers = {};
 handlers[OP.MESSAGE.popupGet] = function () {
   return OP.handlePopupGet();
@@ -1053,6 +1254,12 @@ handlers[OP.MESSAGE.interruptDismiss] = function (message, sender) {
 };
 handlers[OP.MESSAGE.interruptCloseTab] = function (message, sender) {
   return OP.handleInterruptCloseTab(message, sender);
+};
+handlers[OP.MESSAGE.snoozeSet] = function (message) {
+  return OP.handleSnoozeSet(message);
+};
+handlers[OP.MESSAGE.snoozeMove] = function (message) {
+  return OP.handleSnoozeMove(message);
 };
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {

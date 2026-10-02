@@ -9,6 +9,7 @@ importScripts(
 
 OP.ensureLocalState();
 OP.reconcileTimer();
+OP.reconcileSnooze();
 
 chrome.tabs.onRemoved.addListener(function (tabId) {
   OP.handleTabRemoved(tabId);
@@ -17,5 +18,8 @@ chrome.tabs.onRemoved.addListener(function (tabId) {
 chrome.alarms.onAlarm.addListener(function (alarm) {
   if (alarm && alarm.name === OP.ALARM_TIMER) {
     OP.handleTimerAlarm(alarm);
+  }
+  if (alarm && alarm.name === OP.ALARM_SNOOZE) {
+    OP.handleSnoozeAlarm(alarm);
   }
 });

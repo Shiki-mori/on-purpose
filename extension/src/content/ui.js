@@ -182,7 +182,7 @@ function dialogStyle() {
     ".overlay {",
     "  position: fixed;",
     "  inset: 0;",
-    "  z-index: 0;",
+    "  z-index: 3;",
     "  display: flex;",
     "  align-items: center;",
     "  justify-content: center;",
@@ -320,6 +320,42 @@ function dialogStyle() {
     "  color: var(--op-muted);",
     "  white-space: pre-wrap;",
     "  overflow-wrap: anywhere;",
+    "}",
+    ".snooze {",
+    "  position: fixed;",
+    "  z-index: 1;",
+    "  pointer-events: auto;",
+    "  margin: 0;",
+    "  padding: 6px 10px;",
+    "  border: 0;",
+    "  border-radius: 8px;",
+    "  background: rgba(22, 23, 29, 0.72);",
+    "  color: #f3f4f6;",
+    "  cursor: pointer;",
+    "  touch-action: none;",
+    "}",
+    ".snooze-panel {",
+    "  position: fixed;",
+    "  z-index: 2;",
+    "  pointer-events: auto;",
+    "  box-sizing: border-box;",
+    "  width: 220px;",
+    "  padding: 12px;",
+    "  border: 1px solid var(--op-line);",
+    "  border-radius: 12px;",
+    "  background: var(--op-bg);",
+    "  color: var(--op-text);",
+    "}",
+    ".snooze-panel button {",
+    "  display: block;",
+    "  width: 100%;",
+    "  margin-top: 8px;",
+    "  padding: 8px 12px;",
+    "}",
+    ".snooze-deadline {",
+    "  margin: 0 0 8px;",
+    "  color: var(--op-muted);",
+    "  font-size: 12px;",
     "}"
   ].join("\n");
 }
@@ -412,18 +448,12 @@ function commitPurpose(purposeId) {
   });
 }
 
-function mountHost() {
-  host = document.createElement("div");
-  host.setAttribute("data-op-host", "purpose");
-  host.style.setProperty("position", "fixed", "important");
-  host.style.setProperty("inset", "0", "important");
-  host.style.setProperty("z-index", OP.HOST_Z_INDEX, "important");
-  host.style.setProperty("pointer-events", "none", "important");
-  host.style.setProperty("margin", "0", "important");
-  host.style.setProperty("background", "transparent", "important");
-  host.style.setProperty("display", "block", "important");
+function ensureShell() {
+  if (host && host.isConnected && shadow) {
+    return;
+  }
+  host = hostShell("shell");
   shadow = host.attachShadow({ mode: "open" });
-
   var link = document.createElement("link");
   link.rel = "stylesheet";
   link.href = chrome.runtime.getURL("src/shared/theme.css");
@@ -431,8 +461,18 @@ function mountHost() {
   style.textContent = dialogStyle();
   shadow.appendChild(link);
   shadow.appendChild(style);
+  document.documentElement.appendChild(host);
+}
 
+function mountHost() {
+  ensureShell();
+  closeSnoozePanel();
+  var existing = shadow.querySelector(".overlay");
+  if (existing && existing.parentNode) {
+    existing.parentNode.removeChild(existing);
+  }
   var overlay = element("div", "overlay");
+  overlay.setAttribute("data-op-layer", "purpose");
   var dialog = element("div", "dialog");
   dialog.setAttribute("role", "dialog");
   dialog.setAttribute("aria-modal", "true");
@@ -586,11 +626,12 @@ function closeInquiry() {
     keepOnTop = null;
   }
   unblockPage();
-  if (host && host.parentNode) {
-    host.parentNode.removeChild(host);
+  if (shadow) {
+    var overlay = shadow.querySelector(".overlay");
+    if (overlay && overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay);
+    }
   }
-  host = null;
-  shadow = null;
   busy = false;
   view.selectedId = null;
   view.note = "";
@@ -622,7 +663,7 @@ function focusFirst() {
 OP.showPurposeInquiry = function (purposes) {
   view.purposes = sortedPurposes(purposes);
   return exitFullscreen().then(function () {
-    if (!host) {
+    if (!shadow || !shadow.querySelector("#op-purpose-title")) {
       mountHost();
       renderList();
       focusFirst();
@@ -635,7 +676,7 @@ OP.showPurposeInquiry = function (purposes) {
 };
 
 OP.refreshPurposeInquiry = function (purposes) {
-  if (!host || !host.isConnected || host.getAttribute("data-op-host") !== "purpose") {
+  if (!shadow || !shadow.querySelector("#op-purpose-title")) {
     return;
   }
   var available = sortedPurposes(purposes);
@@ -651,7 +692,7 @@ OP.refreshPurposeInquiry = function (purposes) {
 };
 
 OP.isPurposeInquiryOpen = function () {
-  return Boolean(host && host.isConnected && host.getAttribute("data-op-host") === "purpose");
+  return Boolean(shadow && shadow.querySelector("#op-purpose-title"));
 };
 
 var interruptView = {
@@ -709,12 +750,11 @@ function closeInterrupt() {
     keepOnTop = null;
   }
   unblockPage();
-  if (host && host.getAttribute("data-op-host") === "interrupt" && host.parentNode) {
-    host.parentNode.removeChild(host);
-  }
-  if (!host || host.getAttribute("data-op-host") === "interrupt") {
-    host = null;
-    shadow = null;
+  if (shadow) {
+    var overlay = shadow.querySelector(".overlay");
+    if (overlay && overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay);
+    }
   }
   busy = false;
 }
@@ -859,17 +899,14 @@ function dismissInterrupt() {
 }
 
 function mountInterrupt() {
-  host = hostShell("interrupt");
-  shadow = host.attachShadow({ mode: "open" });
-  var link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = chrome.runtime.getURL("src/shared/theme.css");
-  var style = element("style");
-  style.textContent = dialogStyle();
-  shadow.appendChild(link);
-  shadow.appendChild(style);
-
+  ensureShell();
+  closeSnoozePanel();
+  var existing = shadow.querySelector(".overlay");
+  if (existing && existing.parentNode) {
+    existing.parentNode.removeChild(existing);
+  }
   var overlay = element("div", "overlay");
+  overlay.setAttribute("data-op-layer", "interrupt");
   var dialog = element("div", "dialog");
   dialog.setAttribute("role", "dialog");
   dialog.setAttribute("aria-modal", "true");
@@ -906,7 +943,6 @@ function mountInterrupt() {
       event.stopPropagation();
     });
   });
-  document.documentElement.appendChild(host);
   watchHost();
   renderInterrupt();
 }
@@ -924,7 +960,7 @@ OP.showInterrupt = function (options, contrast) {
   if (OP.isPurposeInquiryOpen()) {
     return Promise.resolve();
   }
-  if (host && host.isConnected && host.getAttribute("data-op-host") === "interrupt") {
+  if (shadow && shadow.querySelector("#op-interrupt-title")) {
     renderInterrupt();
     pinHost();
     return Promise.resolve();
@@ -938,7 +974,7 @@ OP.showInterrupt = function (options, contrast) {
     if (OP.isPurposeInquiryOpen()) {
       return;
     }
-    if (host && host.isConnected && host.getAttribute("data-op-host") === "interrupt") {
+    if (shadow && shadow.querySelector("#op-interrupt-title")) {
       renderInterrupt();
       pinHost();
       return;
@@ -951,7 +987,7 @@ OP.showInterrupt = function (options, contrast) {
 };
 
 OP.refreshInterrupt = function (options) {
-  if (!host || !host.isConnected || host.getAttribute("data-op-host") !== "interrupt") {
+  if (!shadow || !shadow.querySelector("#op-interrupt-title")) {
     interruptView.options = sortedOptions(options);
     return;
   }
@@ -966,5 +1002,289 @@ OP.refreshInterrupt = function (options) {
 };
 
 OP.isInterruptOpen = function () {
-  return Boolean(host && host.isConnected && host.getAttribute("data-op-host") === "interrupt");
+  return Boolean(shadow && shadow.querySelector("#op-interrupt-title"));
+};
+
+var snoozeState = {
+  until: null,
+  xRatio: null,
+  yRatio: null,
+  open: false
+};
+var snoozeResizeBound = false;
+
+function padClock(value) {
+  return String(value).padStart(2, "0");
+}
+
+function hourMinute(ms) {
+  var date = new Date(ms);
+  return padClock(date.getHours()) + ":" + padClock(date.getMinutes());
+}
+
+function deadlineText(ms) {
+  var date = new Date(ms);
+  return date.getFullYear() + "-" + padClock(date.getMonth() + 1) + "-" + padClock(date.getDate()) + " " + hourMinute(ms);
+}
+
+function readSnoozeMinutes(raw) {
+  var text = typeof raw === "string" ? raw.trim() : "";
+  if (!/^[0-9]+$/.test(text)) {
+    return { ok: false, error: OP.COPY.invalidMinutes };
+  }
+  var minutes = Number(text);
+  if (!Number.isSafeInteger(minutes) || minutes < 1) {
+    return { ok: false, error: OP.COPY.invalidMinutes };
+  }
+  return { ok: true, minutes: minutes };
+}
+
+function snoozeButtonNode() {
+  return shadow ? shadow.querySelector("[data-op-snooze='1']") : null;
+}
+
+function placeSnoozePanel() {
+  var panel = shadow && shadow.querySelector(".snooze-panel");
+  var button = snoozeButtonNode();
+  if (!panel || !button || panel.hidden) {
+    return;
+  }
+  var edge = OP.BUTTON_EDGE_PX;
+  var rect = button.getBoundingClientRect();
+  var width = panel.offsetWidth;
+  var height = panel.offsetHeight;
+  var x = rect.right - width;
+  var y = rect.top - height - 8;
+  if (y < edge) {
+    y = rect.bottom + 8;
+  }
+  x = Math.min(Math.max(x, edge), Math.max(edge, window.innerWidth - width - edge));
+  y = Math.min(Math.max(y, edge), Math.max(edge, window.innerHeight - height - edge));
+  panel.style.left = x + "px";
+  panel.style.top = y + "px";
+}
+
+function placeSnooze() {
+  var button = snoozeButtonNode();
+  if (!button) {
+    return;
+  }
+  var edge = OP.BUTTON_EDGE_PX;
+  var margin = OP.BUTTON_MARGIN_PX;
+  var width = button.offsetWidth || 48;
+  var height = button.offsetHeight || 32;
+  var maxX = Math.max(edge, window.innerWidth - width - edge);
+  var maxY = Math.max(edge, window.innerHeight - height - edge);
+  var x = window.innerWidth - width - margin;
+  var y = window.innerHeight - height - margin;
+  if (typeof snoozeState.xRatio === "number" && typeof snoozeState.yRatio === "number") {
+    x = snoozeState.xRatio * window.innerWidth;
+    y = snoozeState.yRatio * window.innerHeight;
+  }
+  button.style.left = Math.min(Math.max(x, edge), maxX) + "px";
+  button.style.top = Math.min(Math.max(y, edge), maxY) + "px";
+  placeSnoozePanel();
+}
+
+function renderSnoozeLabel() {
+  var button = snoozeButtonNode();
+  if (!button) {
+    return;
+  }
+  var active = typeof snoozeState.until === "number" && snoozeState.until > Date.now();
+  button.textContent = active ? "至 " + hourMinute(snoozeState.until) : OP.COPY.snoozeIdle;
+  var deadline = shadow.querySelector("[data-op-snooze-deadline]");
+  if (!deadline) {
+    return;
+  }
+  if (active) {
+    deadline.hidden = false;
+    deadline.textContent = deadlineText(snoozeState.until);
+  } else {
+    deadline.hidden = true;
+    deadline.textContent = "";
+  }
+}
+
+function closeSnoozePanel() {
+  snoozeState.open = false;
+  var panel = shadow && shadow.querySelector(".snooze-panel");
+  if (panel) {
+    panel.hidden = true;
+  }
+}
+
+function openSnoozePanel() {
+  var panel = shadow && shadow.querySelector(".snooze-panel");
+  if (!panel) {
+    return;
+  }
+  snoozeState.open = true;
+  panel.hidden = false;
+  var input = panel.querySelector("[data-op-snooze-custom]");
+  if (input) {
+    input.value = String(OP.DEFAULT_SNOOZE_INPUT_MINUTES);
+  }
+  showError(panel.querySelector("[data-op-error='snooze']"), "");
+  renderSnoozeLabel();
+  placeSnoozePanel();
+}
+
+function sendSnoozeMinutes(minutes) {
+  send(OP.MESSAGE.snoozeSet, { minutes: String(minutes) }).then(function (response) {
+    var error = shadow && shadow.querySelector("[data-op-error='snooze']");
+    if (!response.ok) {
+      showError(error, response.error || OP.COPY.saveFailed);
+      return;
+    }
+    if (response.snooze) {
+      OP.applySnooze(response.snooze);
+    }
+    closeSnoozePanel();
+  });
+}
+
+function bindSnoozePointer(button) {
+  var drag = null;
+  button.addEventListener("pointerdown", function (event) {
+    if (event.button !== 0) {
+      return;
+    }
+    drag = {
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      pointerId: event.pointerId
+    };
+    try {
+      if (button.setPointerCapture) {
+        button.setPointerCapture(event.pointerId);
+      }
+    } catch (error) {
+      void error;
+    }
+  });
+  button.addEventListener("pointermove", function (event) {
+    if (!drag || event.pointerId !== drag.pointerId) {
+      return;
+    }
+    var dx = event.clientX - drag.x;
+    var dy = event.clientY - drag.y;
+    if (!drag.moved && Math.sqrt(dx * dx + dy * dy) <= OP.DRAG_THRESHOLD_PX) {
+      return;
+    }
+    if (!drag.moved) {
+      drag.moved = true;
+      drag.originLeft = button.getBoundingClientRect().left;
+      drag.originTop = button.getBoundingClientRect().top;
+    }
+    var edge = OP.BUTTON_EDGE_PX;
+    var left = drag.originLeft + (event.clientX - drag.x);
+    var top = drag.originTop + (event.clientY - drag.y);
+    var maxX = Math.max(edge, window.innerWidth - button.offsetWidth - edge);
+    var maxY = Math.max(edge, window.innerHeight - button.offsetHeight - edge);
+    button.style.left = Math.min(Math.max(left, edge), maxX) + "px";
+    button.style.top = Math.min(Math.max(top, edge), maxY) + "px";
+    placeSnoozePanel();
+  });
+  button.addEventListener("pointerup", function (event) {
+    if (!drag || event.pointerId !== drag.pointerId) {
+      return;
+    }
+    var moved = drag.moved;
+    drag = null;
+    if (moved) {
+      var rect = button.getBoundingClientRect();
+      send(OP.MESSAGE.snoozeMove, {
+        xRatio: window.innerWidth ? rect.left / window.innerWidth : 0,
+        yRatio: window.innerHeight ? rect.top / window.innerHeight : 0
+      }).then(function (response) {
+        if (response.ok && response.snooze) {
+          OP.applySnooze(response.snooze);
+        }
+      });
+      return;
+    }
+    if (snoozeState.open) {
+      closeSnoozePanel();
+    } else {
+      openSnoozePanel();
+    }
+  });
+  button.addEventListener("pointercancel", function (event) {
+    if (drag && event.pointerId === drag.pointerId) {
+      drag = null;
+    }
+  });
+}
+
+function ensureSnoozeControls() {
+  if (!shadow || shadow.querySelector("[data-op-snooze='1']")) {
+    return;
+  }
+  var button = element("button", "snooze", OP.COPY.snoozeIdle);
+  button.type = "button";
+  button.setAttribute("data-op-snooze", "1");
+  var panel = element("div", "snooze-panel");
+  panel.hidden = true;
+  var deadline = element("p", "snooze-deadline", "");
+  deadline.hidden = true;
+  deadline.setAttribute("data-op-snooze-deadline", "1");
+  var ten = element("button", "", "10 分钟");
+  ten.type = "button";
+  ten.setAttribute("data-op-snooze-preset", "10");
+  var thirty = element("button", "", "30 分钟");
+  thirty.type = "button";
+  thirty.setAttribute("data-op-snooze-preset", "30");
+  var custom = document.createElement("input");
+  custom.type = "text";
+  custom.setAttribute("data-op-snooze-custom", "1");
+  custom.setAttribute("inputmode", "numeric");
+  custom.value = String(OP.DEFAULT_SNOOZE_INPUT_MINUTES);
+  var confirm = element("button", "confirm", OP.COPY.confirm);
+  confirm.type = "button";
+  confirm.setAttribute("data-op-action", "snooze-custom");
+  var error = element("p", "error");
+  error.hidden = true;
+  error.setAttribute("data-op-error", "snooze");
+  panel.appendChild(deadline);
+  panel.appendChild(ten);
+  panel.appendChild(thirty);
+  panel.appendChild(custom);
+  panel.appendChild(confirm);
+  panel.appendChild(error);
+  shadow.appendChild(button);
+  shadow.appendChild(panel);
+  bindSnoozePointer(button);
+  ten.addEventListener("click", function () {
+    sendSnoozeMinutes(OP.PRESET_SNOOZE_MINUTES[0]);
+  });
+  thirty.addEventListener("click", function () {
+    sendSnoozeMinutes(OP.PRESET_SNOOZE_MINUTES[1]);
+  });
+  confirm.addEventListener("click", function () {
+    var check = readSnoozeMinutes(custom.value);
+    if (!check.ok) {
+      showError(error, check.error);
+      return;
+    }
+    sendSnoozeMinutes(check.minutes);
+  });
+  if (!snoozeResizeBound) {
+    snoozeResizeBound = true;
+    window.addEventListener("resize", placeSnooze);
+  }
+}
+
+OP.applySnooze = function (snapshot) {
+  if (!snapshot) {
+    return;
+  }
+  snoozeState.until = typeof snapshot.until === "number" ? snapshot.until : null;
+  snoozeState.xRatio = typeof snapshot.xRatio === "number" ? snapshot.xRatio : null;
+  snoozeState.yRatio = typeof snapshot.yRatio === "number" ? snapshot.yRatio : null;
+  ensureShell();
+  ensureSnoozeControls();
+  renderSnoozeLabel();
+  placeSnooze();
 };

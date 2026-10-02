@@ -56,6 +56,9 @@ function announceReady() {
     if (chrome.runtime.lastError || !response || !response.ok) {
       return;
     }
+    if (response.snooze) {
+      OP.applySnooze(response.snooze);
+    }
     if (response.showInterrupt) {
       rememberInterrupt(response);
     }
@@ -93,6 +96,10 @@ if (!globalThis.__opContentBound) {
           }
           OP.refreshInterrupt(message.interruptOptions);
         }
+        return;
+      }
+      if ((message.type === OP.MESSAGE.snoozeSet || message.type === OP.MESSAGE.snoozeMove) && message.snooze) {
+        OP.applySnooze(message.snooze);
         return;
       }
       if (message.type === OP.MESSAGE.showInterrupt) {
