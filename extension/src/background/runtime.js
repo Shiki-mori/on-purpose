@@ -175,14 +175,19 @@ OP.handleContentReady = function (message, sender) {
     }
     var url = message && typeof message.url === "string" ? message.url : "";
     var site = OP.findSite(url);
-    // 任务 2 只让主页显示。非主页的分支在任务 3 补上。
-    if (!site || !site.isHome(url)) {
+    if (!site) {
       return { ok: true, showPurpose: false };
     }
-    return OP.ensureLocalState().then(function (local) {
-      return loadSession().then(function (session) {
-        session.roundActive = true;
-        ensurePendingMap(session)[String(tabId)] = true;
+    return loadSession().then(function (session) {
+      var key = String(tabId);
+      var pending = ensurePendingMap(session);
+      var showPurpose = site.isHome(url) || !session.roundActive || Object.prototype.hasOwnProperty.call(pending, key);
+      if (!showPurpose) {
+        return { ok: true, showPurpose: false };
+      }
+      session.roundActive = true;
+      pending[key] = true;
+      return OP.ensureLocalState().then(function (local) {
         return OP.writeSession(session).then(function () {
           return {
             ok: true,
@@ -352,26 +357,43 @@ OP.handlePurposeDelete = function (message) {
   });
 };
 
+function dropPendingTab(session, tabId) {
+  if (!session || !session.purposePending) {
+    return null;
+  }
+  var key = String(tabId);
+  if (!Object.prototype.hasOwnProperty.call(session.purposePending, key)) {
+    return null;
+  }
+  var next = cloneState(session);
+  delete next.purposePending[key];
+  return OP.writeSession(next);
+}
+
+function sessionHasRound(session) {
+  if (!session) {
+    return false;
+  }
+  if (session.roundActive || session.purposeAnswered || session.latestPurposeRecordId) {
+    return true;
+  }
+  var pending = session.purposePending;
+  return Boolean(pending && typeof pending === "object" && Object.keys(pending).length);
+}
+
 OP.handleTabRemoved = function (tabId) {
   return enqueue(function () {
     return OP.readSession().then(function (session) {
-      if (!session || !session.purposePending) {
-        return null;
-      }
-      var key = String(tabId);
-      if (!Object.prototype.hasOwnProperty.call(session.purposePending, key)) {
-        return null;
-      }
-      var next = cloneState(session);
-      delete next.purposePending[key];
       return queryTabs().then(function (tabs) {
-        var stillOpen = tabs.some(isBilibiliTab);
-        if (!stillOpen) {
+        if (!tabs.some(isBilibiliTab)) {
+          if (!sessionHasRound(session)) {
+            return null;
+          }
           return OP.writeSession(OP.createEmptySessionState());
         }
-        return OP.writeSession(next);
+        return dropPendingTab(session, tabId);
       }).catch(function () {
-        return OP.writeSession(next);
+        return dropPendingTab(session, tabId);
       });
     });
   }).catch(function () {
