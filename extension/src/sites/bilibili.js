@@ -1,3 +1,4 @@
+// 以后新增网站时：新增站点文件，在 index.js 注册，并把该站的 https 网址加入清单的 host_permissions、内容脚本 matches 和 web_accessible_resources。不改计时状态机和记录结构。
 var OP = globalThis.OP || (globalThis.OP = {});
 
 OP.sites = OP.sites || {};
