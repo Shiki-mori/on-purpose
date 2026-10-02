@@ -8,3 +8,7 @@ importScripts(
 );
 
 OP.ensureLocalState();
+
+chrome.tabs.onRemoved.addListener(function (tabId) {
+  OP.handleTabRemoved(tabId);
+});

@@ -29,6 +29,41 @@ h2 {
   font-weight: 600;
 }
 
+button,
+input {
+  font: inherit;
+}
+
+button {
+  border: 1px solid var(--op-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--op-text);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--op-accent);
+  border-color: var(--op-accent);
+  color: var(--op-bg);
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+input {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--op-line);
+  border-radius: 6px;
+  background: var(--op-surface);
+  color: var(--op-text);
+}
+
 p,
 li {
   margin: 0;
@@ -43,6 +78,59 @@ ul {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.purpose + .purpose {
+  margin-top: 8px;
+}
+
+.purpose-view,
+.purpose-editor,
+.purpose-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.purpose-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.purpose-actions,
+.purpose-editor button {
+  flex-shrink: 0;
+}
+
+.purpose-editor {
+  width: 100%;
+}
+
+.purpose-editor input {
+  flex: 1;
+  width: 0;
+}
+
+.row-error {
+  margin-top: 4px;
+  color: var(--op-accent);
+  font-size: 12px;
+}
+
+.record + .record {
+  margin-top: 10px;
+}
+
+.record-time,
+.record-source,
+.record-note {
+  color: var(--op-muted);
+}
+
+.record-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 #first-label,

@@ -20,5 +20,31 @@
   },
   "icons": {
     "128": "icons/icon128.png"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.bilibili.com/*",
+        "https://bilibili.com/*"
+      ],
+      "js": [
+        "src/shared/constants.js",
+        "src/sites/bilibili.js",
+        "src/sites/index.js",
+        "src/content/ui.js",
+        "src/content/content-script.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/shared/theme.css"],
+      "matches": [
+        "https://*.bilibili.com/*",
+        "https://bilibili.com/*"
+      ]
+    }
+  ]
 }
