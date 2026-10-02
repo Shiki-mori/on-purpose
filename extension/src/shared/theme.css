@@ -1,0 +1,18 @@
+:root,
+:host {
+  --op-bg: #16171d;
+  --op-surface: #23242c;
+  --op-text: #f3f4f6;
+  --op-muted: #b6b8c3;
+  --op-line: #3a3b46;
+  --op-accent: #7c8cff;
+  --op-snooze-bg: rgba(22, 23, 29, 0.72);
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--op-bg);
+  color: var(--op-text);
+  font: 14px/1.5 system-ui, "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+}

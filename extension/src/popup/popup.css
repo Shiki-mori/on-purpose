@@ -1,0 +1,56 @@
+html,
+body {
+  width: 360px;
+  max-height: 560px;
+}
+
+body {
+  overflow: auto;
+}
+
+main {
+  box-sizing: border-box;
+  padding: 12px 16px 16px;
+}
+
+section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--op-line);
+}
+
+section:last-of-type {
+  border-bottom: 0;
+}
+
+h2 {
+  margin: 0 0 8px;
+  color: var(--op-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+p,
+li {
+  margin: 0;
+}
+
+p + p,
+li + li {
+  margin-top: 4px;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#first-label,
+#again-label,
+#error {
+  color: var(--op-muted);
+}
+
+#error {
+  margin-top: 8px;
+}

@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "有目的",
+  "version": "0.1.0",
+  "description": "在哔哩哔哩上询问目的并到时打断",
+  "permissions": ["storage", "alarms", "tabs"],
+  "host_permissions": [
+    "https://*.bilibili.com/*",
+    "https://bilibili.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+  "action": {
+    "default_title": "有目的",
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "128": "icons/icon128.png"
+  }
+}
