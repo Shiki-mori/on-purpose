@@ -289,6 +289,37 @@ function dialogStyle() {
     "  margin: 8px 0 0;",
     "  color: var(--op-accent);",
     "  font-size: 12px;",
+    "}",
+    ".dialog-head {",
+    "  display: flex;",
+    "  align-items: flex-start;",
+    "  gap: 12px;",
+    "  margin-bottom: 16px;",
+    "}",
+    ".dialog-head h1 { flex: 1; margin: 0; }",
+    ".dismiss {",
+    "  flex-shrink: 0;",
+    "  padding: 4px 10px;",
+    "  background: transparent;",
+    "  color: var(--op-text);",
+    "  border-color: var(--op-line);",
+    "}",
+    ".contrast {",
+    "  margin: 0 0 16px;",
+    "  padding-bottom: 12px;",
+    "  border-bottom: 1px solid var(--op-line);",
+    "}",
+    ".contrast-title {",
+    "  margin: 0 0 4px;",
+    "  color: var(--op-muted);",
+    "  font-size: 12px;",
+    "}",
+    ".contrast-name { margin: 0; }",
+    ".contrast-note {",
+    "  margin: 4px 0 0;",
+    "  color: var(--op-muted);",
+    "  white-space: pre-wrap;",
+    "  overflow-wrap: anywhere;",
     "}"
   ].join("\n");
 }
@@ -566,6 +597,11 @@ function closeInquiry() {
   view.commitError = "";
   view.addError = "";
   view.skipError = "";
+  var notify = OP.onPurposeInquiryClosed;
+  OP.onPurposeInquiryClosed = null;
+  if (typeof notify === "function") {
+    notify();
+  }
 }
 
 function focusFirst() {
@@ -599,7 +635,7 @@ OP.showPurposeInquiry = function (purposes) {
 };
 
 OP.refreshPurposeInquiry = function (purposes) {
-  if (!host || !host.isConnected) {
+  if (!host || !host.isConnected || host.getAttribute("data-op-host") !== "purpose") {
     return;
   }
   var available = sortedPurposes(purposes);
@@ -615,5 +651,320 @@ OP.refreshPurposeInquiry = function (purposes) {
 };
 
 OP.isPurposeInquiryOpen = function () {
-  return Boolean(host && host.isConnected);
+  return Boolean(host && host.isConnected && host.getAttribute("data-op-host") === "purpose");
+};
+
+var interruptView = {
+  options: [],
+  selectedId: null,
+  note: "",
+  error: "",
+  contrast: null
+};
+var resumePlayback = null;
+var redisplayTimer = null;
+var interruptMounting = false;
+
+function sortedOptions(options) {
+  return (Array.isArray(options) ? options : []).slice().sort(function (left, right) {
+    return left.order - right.order;
+  });
+}
+
+function hostShell(kind) {
+  var node = document.createElement("div");
+  node.setAttribute("data-op-host", kind);
+  node.style.setProperty("position", "fixed", "important");
+  node.style.setProperty("inset", "0", "important");
+  node.style.setProperty("z-index", OP.HOST_Z_INDEX, "important");
+  node.style.setProperty("pointer-events", "none", "important");
+  node.style.setProperty("margin", "0", "important");
+  node.style.setProperty("background", "transparent", "important");
+  node.style.setProperty("display", "block", "important");
+  return node;
+}
+
+function watchHost() {
+  if (keepOnTop) {
+    keepOnTop.disconnect();
+  }
+  keepOnTop = new MutationObserver(pinHost);
+  keepOnTop.observe(document.documentElement, { childList: true });
+  bindGuards();
+  pinHost();
+  blockPage();
+}
+
+function pauseForInterrupt() {
+  resumePlayback = null;
+  var site = OP.findSite(location.href);
+  if (site && typeof site.pausePlayback === "function") {
+    resumePlayback = site.pausePlayback(document);
+  }
+}
+
+function closeInterrupt() {
+  if (keepOnTop) {
+    keepOnTop.disconnect();
+    keepOnTop = null;
+  }
+  unblockPage();
+  if (host && host.getAttribute("data-op-host") === "interrupt" && host.parentNode) {
+    host.parentNode.removeChild(host);
+  }
+  if (!host || host.getAttribute("data-op-host") === "interrupt") {
+    host = null;
+    shadow = null;
+  }
+  busy = false;
+}
+
+function renderInterrupt() {
+  if (!shadow) {
+    return;
+  }
+  var list = shadow.querySelector(".options");
+  var draft = interruptView.note;
+  var selected = interruptView.selectedId;
+  list.replaceChildren();
+  interruptView.options.forEach(function (option) {
+    var item = element("li");
+    var choice = element("button", "choice", option.name);
+    choice.type = "button";
+    choice.setAttribute("data-option-id", option.id);
+    if (option.closesTab) {
+      choice.setAttribute("data-closes-tab", "true");
+      choice.addEventListener("click", function () {
+        closeCurrentTab();
+      });
+      item.appendChild(choice);
+      list.appendChild(item);
+      return;
+    }
+    var pressed = option.id === selected;
+    choice.setAttribute("aria-pressed", pressed ? "true" : "false");
+    choice.addEventListener("click", function () {
+      if (busy || interruptView.selectedId === option.id) {
+        return;
+      }
+      interruptView.selectedId = option.id;
+      interruptView.note = "";
+      interruptView.error = "";
+      renderInterrupt();
+      var note = list.querySelector("textarea");
+      if (note) {
+        note.focus();
+      }
+    });
+    item.appendChild(choice);
+    if (pressed) {
+      var noteBox = element("div", "note");
+      var noteLabel = element("label", "note-label", "备注");
+      var field = document.createElement("textarea");
+      field.id = "op-interrupt-note";
+      field.value = draft;
+      field.setAttribute("data-op-note", "1");
+      noteLabel.htmlFor = field.id;
+      field.addEventListener("input", function () {
+        interruptView.note = field.value;
+        interruptView.error = "";
+        showError(shadow.querySelector("[data-op-error='interrupt']"), "");
+      });
+      var confirm = element("button", "confirm", OP.COPY.confirm);
+      confirm.type = "button";
+      confirm.setAttribute("data-op-action", "interrupt-commit");
+      confirm.addEventListener("click", commitInterrupt);
+      noteBox.appendChild(noteLabel);
+      noteBox.appendChild(field);
+      noteBox.appendChild(confirm);
+      item.appendChild(noteBox);
+    }
+    list.appendChild(item);
+  });
+  showError(shadow.querySelector("[data-op-error='interrupt']"), interruptView.error);
+}
+
+function commitInterrupt() {
+  if (busy || !interruptView.selectedId) {
+    return;
+  }
+  var field = shadow && shadow.querySelector("#op-interrupt-note");
+  if (field) {
+    interruptView.note = field.value;
+  }
+  busy = true;
+  send(OP.MESSAGE.interruptCommit, {
+    optionId: interruptView.selectedId,
+    note: interruptView.note
+  }).then(function (response) {
+    busy = false;
+    if (!response.ok) {
+      interruptView.error = response.error || OP.COPY.saveFailed;
+      showError(shadow && shadow.querySelector("[data-op-error='interrupt']"), interruptView.error);
+      return;
+    }
+    if (redisplayTimer) {
+      window.clearTimeout(redisplayTimer);
+      redisplayTimer = null;
+    }
+    resumePlayback = null;
+    closeInterrupt();
+  });
+}
+
+function closeCurrentTab() {
+  if (busy) {
+    return;
+  }
+  busy = true;
+  send(OP.MESSAGE.interruptCloseTab).then(function (response) {
+    busy = false;
+    if (!response.ok) {
+      interruptView.error = response.error || OP.COPY.saveFailed;
+      showError(shadow && shadow.querySelector("[data-op-error='interrupt']"), interruptView.error);
+      return;
+    }
+    if (redisplayTimer) {
+      window.clearTimeout(redisplayTimer);
+      redisplayTimer = null;
+    }
+    resumePlayback = null;
+    closeInterrupt();
+  });
+}
+
+function dismissInterrupt() {
+  if (busy) {
+    return;
+  }
+  busy = true;
+  send(OP.MESSAGE.interruptDismiss).then(function (response) {
+    busy = false;
+    if (!response.ok) {
+      interruptView.error = response.error || OP.COPY.saveFailed;
+      showError(shadow && shadow.querySelector("[data-op-error='interrupt']"), interruptView.error);
+      return;
+    }
+    var resume = resumePlayback;
+    resumePlayback = null;
+    closeInterrupt();
+    if (typeof resume === "function") {
+      resume();
+    }
+    redisplayTimer = window.setTimeout(function () {
+      redisplayTimer = null;
+      OP.showInterrupt(interruptView.options, interruptView.contrast);
+    }, OP.REDISPLAY_MS);
+  });
+}
+
+function mountInterrupt() {
+  host = hostShell("interrupt");
+  shadow = host.attachShadow({ mode: "open" });
+  var link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = chrome.runtime.getURL("src/shared/theme.css");
+  var style = element("style");
+  style.textContent = dialogStyle();
+  shadow.appendChild(link);
+  shadow.appendChild(style);
+
+  var overlay = element("div", "overlay");
+  var dialog = element("div", "dialog");
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  var head = element("div", "dialog-head");
+  var title = element("h1", "", OP.COPY.interruptTitle);
+  title.id = "op-interrupt-title";
+  dialog.setAttribute("aria-labelledby", title.id);
+  var dismiss = element("button", "dismiss", OP.COPY.dismiss);
+  dismiss.type = "button";
+  dismiss.setAttribute("data-op-action", "dismiss");
+  dismiss.addEventListener("click", dismissInterrupt);
+  head.appendChild(title);
+  head.appendChild(dismiss);
+  dialog.appendChild(head);
+  if (interruptView.contrast && interruptView.contrast.name) {
+    var contrast = element("div", "contrast");
+    contrast.setAttribute("data-op-contrast", "1");
+    contrast.appendChild(element("p", "contrast-title", OP.COPY.purposeContrastTitle));
+    contrast.appendChild(element("p", "contrast-name", interruptView.contrast.name));
+    if (interruptView.contrast.note) {
+      contrast.appendChild(element("p", "contrast-note", interruptView.contrast.note));
+    }
+    dialog.appendChild(contrast);
+  }
+  dialog.appendChild(element("ul", "options"));
+  var error = element("p", "error");
+  error.hidden = true;
+  error.setAttribute("data-op-error", "interrupt");
+  dialog.appendChild(error);
+  overlay.appendChild(dialog);
+  shadow.appendChild(overlay);
+  ["mousedown", "mouseup", "click", "pointerdown", "pointerup", "auxclick", "contextmenu"].forEach(function (type) {
+    overlay.addEventListener(type, function (event) {
+      event.stopPropagation();
+    });
+  });
+  document.documentElement.appendChild(host);
+  watchHost();
+  renderInterrupt();
+}
+
+OP.showInterrupt = function (options, contrast) {
+  if (redisplayTimer) {
+    window.clearTimeout(redisplayTimer);
+    redisplayTimer = null;
+  }
+  interruptView.options = sortedOptions(options);
+  interruptView.contrast = contrast || null;
+  interruptView.selectedId = null;
+  interruptView.note = "";
+  interruptView.error = "";
+  if (OP.isPurposeInquiryOpen()) {
+    return Promise.resolve();
+  }
+  if (host && host.isConnected && host.getAttribute("data-op-host") === "interrupt") {
+    renderInterrupt();
+    pinHost();
+    return Promise.resolve();
+  }
+  if (interruptMounting) {
+    return Promise.resolve();
+  }
+  interruptMounting = true;
+  return exitFullscreen().then(function () {
+    interruptMounting = false;
+    if (OP.isPurposeInquiryOpen()) {
+      return;
+    }
+    if (host && host.isConnected && host.getAttribute("data-op-host") === "interrupt") {
+      renderInterrupt();
+      pinHost();
+      return;
+    }
+    mountInterrupt();
+    pauseForInterrupt();
+  }, function () {
+    interruptMounting = false;
+  });
+};
+
+OP.refreshInterrupt = function (options) {
+  if (!host || !host.isConnected || host.getAttribute("data-op-host") !== "interrupt") {
+    interruptView.options = sortedOptions(options);
+    return;
+  }
+  var available = sortedOptions(options);
+  interruptView.options = available;
+  if (interruptView.selectedId && !available.some(function (item) { return item.id === interruptView.selectedId; })) {
+    interruptView.selectedId = null;
+    interruptView.note = "";
+    interruptView.error = "";
+  }
+  renderInterrupt();
+};
+
+OP.isInterruptOpen = function () {
+  return Boolean(host && host.isConnected && host.getAttribute("data-op-host") === "interrupt");
 };

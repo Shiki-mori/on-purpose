@@ -150,17 +150,224 @@ function finishPurpose(session, tabId, recordId) {
   }
 }
 
+function ensureTimer(session) {
+  if (!session.timer || typeof session.timer !== "object") {
+    session.timer = { mode: "idle", startedAt: null, intervalKind: null };
+  }
+  return session.timer;
+}
+
+function ensureInterrupt(session) {
+  if (!session.interrupt || typeof session.interrupt !== "object") {
+    session.interrupt = { active: false, reason: null, pending: {} };
+  }
+  if (!session.interrupt.pending || typeof session.interrupt.pending !== "object" || Array.isArray(session.interrupt.pending)) {
+    session.interrupt.pending = {};
+  }
+  return session.interrupt;
+}
+
+function mapEmpty(map) {
+  return !map || typeof map !== "object" || Array.isArray(map) || Object.keys(map).length === 0;
+}
+
+function idleTimerFields(session) {
+  var timer = ensureTimer(session);
+  timer.mode = "idle";
+  timer.startedAt = null;
+  timer.intervalKind = null;
+}
+
+function intervalMinutes(local, kind) {
+  if (!local || !local.settings) {
+    return null;
+  }
+  if (kind === "again") {
+    return local.settings.againIntervalMinutes;
+  }
+  if (kind === "first") {
+    return local.settings.firstIntervalMinutes;
+  }
+  return null;
+}
+
+function dueAt(startedAt, minutes) {
+  return startedAt + minutes * 60 * 1000;
+}
+
+function setTimerAlarm(when) {
+  return new Promise(function (resolve, reject) {
+    chrome.alarms.create(OP.ALARM_TIMER, { when: when }, function () {
+      var error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+function clearTimerAlarm() {
+  return new Promise(function (resolve) {
+    chrome.alarms.clear(OP.ALARM_TIMER, function () {
+      void chrome.runtime.lastError;
+      resolve();
+    });
+  });
+}
+
+function clearRound() {
+  return clearTimerAlarm().then(function () {
+    return OP.writeSession(OP.createEmptySessionState());
+  });
+}
+
+function armTimer(session, local, kind) {
+  var minutes = intervalMinutes(local, kind);
+  var now = Date.now();
+  var timer = ensureTimer(session);
+  timer.mode = "running";
+  timer.startedAt = now;
+  timer.intervalKind = kind;
+  var interrupt = ensureInterrupt(session);
+  interrupt.active = false;
+  interrupt.reason = null;
+  interrupt.pending = {};
+  return { when: dueAt(now, minutes) };
+}
+
+function rollbackRecord(local, record) {
+  local.records = local.records.filter(function (item) {
+    return item.id !== record.id;
+  });
+  return OP.writeLocal(local).then(function () {
+    throw new Error("session");
+  });
+}
+
+function writeSessionOrRollback(local, session, record) {
+  return OP.writeSession(session).catch(function () {
+    return rollbackRecord(local, record);
+  });
+}
+
+function planFirstInterval(session, local) {
+  if (!mapEmpty(ensurePendingMap(session))) {
+    return null;
+  }
+  var interrupt = ensureInterrupt(session);
+  if (interrupt.active && !mapEmpty(interrupt.pending)) {
+    return null;
+  }
+  if (!session.purposeAnswered) {
+    return null;
+  }
+  if (interrupt.active) {
+    return armTimer(session, local, "again");
+  }
+  return armTimer(session, local, "first");
+}
+
 function appendRecord(local, record, session, tabId) {
   local.records.push(record);
   return OP.writeLocal(local).then(function () {
     finishPurpose(session, tabId, record.id);
-    return OP.writeSession(session).catch(function () {
-      local.records = local.records.filter(function (item) {
-        return item.id !== record.id;
+    var plan = planFirstInterval(session, local);
+    return writeSessionOrRollback(local, session, record).then(function () {
+      if (!plan) {
+        return null;
+      }
+      return setTimerAlarm(plan.when);
+    });
+  });
+}
+
+function contrastFor(local, session) {
+  if (!session || !session.latestPurposeRecordId || !local || !Array.isArray(local.records)) {
+    return null;
+  }
+  var index;
+  var record = null;
+  for (index = 0; index < local.records.length; index += 1) {
+    if (local.records[index].id === session.latestPurposeRecordId) {
+      record = local.records[index];
+      break;
+    }
+  }
+  if (!record || (record.source !== "purpose" && record.kind !== "purpose" && record.kind !== "skip")) {
+    return null;
+  }
+  var contrast = OP.purposeContrast(local, record);
+  if (!contrast || !contrast.name) {
+    return null;
+  }
+  return contrast;
+}
+
+function interruptPayload(local, session) {
+  return {
+    type: OP.MESSAGE.showInterrupt,
+    interruptOptions: copyList(local.interruptOptions || []),
+    purposeContrast: contrastFor(local, session)
+  };
+}
+
+function bilibiliTabs(tabs) {
+  return (tabs || []).filter(isBilibiliTab);
+}
+
+function startInterruptRound(session, local, tabs, reason) {
+  idleTimerFields(session);
+  var interrupt = ensureInterrupt(session);
+  interrupt.active = true;
+  interrupt.reason = reason;
+  interrupt.pending = {};
+  tabs.forEach(function (tab) {
+    if (typeof tab.id === "number") {
+      interrupt.pending[String(tab.id)] = true;
+    }
+  });
+  var payload = interruptPayload(local, session);
+  return clearTimerAlarm().then(function () {
+    return OP.writeSession(session);
+  }).then(function () {
+    tabs.forEach(function (tab) {
+      if (typeof tab.id !== "number") {
+        return;
+      }
+      chrome.tabs.sendMessage(tab.id, payload, function () {
+        void chrome.runtime.lastError;
       });
-      return OP.writeLocal(local).then(function () {
-        throw new Error("session");
-      });
+    });
+  });
+}
+
+function readyBody(local, session, showPurpose, showInterrupt) {
+  var body = {
+    ok: true,
+    showPurpose: showPurpose,
+    showInterrupt: showInterrupt
+  };
+  if (showPurpose && local) {
+    body.purposes = copyList(local.purposes);
+  }
+  if (showInterrupt && local) {
+    body.interruptOptions = copyList(local.interruptOptions || []);
+    body.purposeContrast = contrastFor(local, session);
+  }
+  return body;
+}
+
+function removeTab(tabId) {
+  return new Promise(function (resolve, reject) {
+    chrome.tabs.remove(tabId, function () {
+      var error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve();
     });
   });
 }
@@ -198,19 +405,39 @@ OP.handleContentReady = function (message, sender) {
     return loadSession().then(function (session) {
       var key = String(tabId);
       var pending = ensurePendingMap(session);
+      var interrupt = ensureInterrupt(session);
       var showPurpose = site.isHome(url) || !session.roundActive || Object.prototype.hasOwnProperty.call(pending, key);
-      if (!showPurpose) {
-        return { ok: true, showPurpose: false };
+      var showInterrupt = Boolean(interrupt.active);
+      var timerStopped = false;
+      var changed = false;
+      if (showPurpose) {
+        session.roundActive = true;
+        if (!Object.prototype.hasOwnProperty.call(pending, key)) {
+          changed = true;
+        }
+        pending[key] = true;
+        if (ensureTimer(session).mode === "running") {
+          idleTimerFields(session);
+          timerStopped = true;
+          changed = true;
+        }
       }
-      session.roundActive = true;
-      pending[key] = true;
+      if (showInterrupt && !Object.prototype.hasOwnProperty.call(interrupt.pending, key)) {
+        interrupt.pending[key] = true;
+        changed = true;
+      }
+      if (!showPurpose && !showInterrupt) {
+        return { ok: true, showPurpose: false, showInterrupt: false };
+      }
       return OP.ensureLocalState().then(function (local) {
-        return OP.writeSession(session).then(function () {
-          return {
-            ok: true,
-            showPurpose: true,
-            purposes: copyList(local.purposes)
-          };
+        var saved = changed ? OP.writeSession(session) : Promise.resolve();
+        return saved.then(function () {
+          if (timerStopped) {
+            return clearTimerAlarm();
+          }
+          return null;
+        }).then(function () {
+          return readyBody(local, session, showPurpose, showInterrupt);
         });
       });
     });
@@ -363,7 +590,30 @@ OP.handleSettingsSet = function (message) {
         next.settings.againIntervalMinutes = check.minutes;
       }
       return OP.writeLocal(next).then(function () {
-        return { ok: true, settings: settingsFrom(next) };
+        return loadSession().then(function (session) {
+          var kind = hasFirst ? "first" : "again";
+          var timer = ensureTimer(session);
+          if (timer.mode !== "running" || timer.intervalKind !== kind || typeof timer.startedAt !== "number") {
+            return { ok: true, settings: settingsFrom(next) };
+          }
+          var due = dueAt(timer.startedAt, check.minutes);
+          if (due > Date.now()) {
+            return setTimerAlarm(due).then(function () {
+              return { ok: true, settings: settingsFrom(next) };
+            });
+          }
+          return queryTabs().then(function (tabs) {
+            var open = bilibiliTabs(tabs);
+            if (!open.length) {
+              return clearRound().then(function () {
+                return { ok: true, settings: settingsFrom(next) };
+              });
+            }
+            return startInterruptRound(session, next, open, "timer").then(function () {
+              return { ok: true, settings: settingsFrom(next) };
+            });
+          });
+        });
       });
     });
   }).catch(function () {
@@ -492,19 +742,6 @@ OP.handlePurposeDelete = function (message) {
   });
 };
 
-function dropPendingTab(session, tabId) {
-  if (!session || !session.purposePending) {
-    return null;
-  }
-  var key = String(tabId);
-  if (!Object.prototype.hasOwnProperty.call(session.purposePending, key)) {
-    return null;
-  }
-  var next = cloneState(session);
-  delete next.purposePending[key];
-  return OP.writeSession(next);
-}
-
 function sessionHasRound(session) {
   if (!session) {
     return false;
@@ -512,23 +749,261 @@ function sessionHasRound(session) {
   if (session.roundActive || session.purposeAnswered || session.latestPurposeRecordId) {
     return true;
   }
-  var pending = session.purposePending;
-  return Boolean(pending && typeof pending === "object" && Object.keys(pending).length);
+  if (session.timer && session.timer.mode === "running") {
+    return true;
+  }
+  if (session.interrupt && (session.interrupt.active || !mapEmpty(session.interrupt.pending))) {
+    return true;
+  }
+  return !mapEmpty(session.purposePending);
+}
+
+function dropClosedTab(session, tabId) {
+  if (!session) {
+    return null;
+  }
+  var next = cloneState(session);
+  var key = String(tabId);
+  var purpose = ensurePendingMap(next);
+  var interrupt = ensureInterrupt(next);
+  var hadPurpose = Object.prototype.hasOwnProperty.call(purpose, key);
+  var hadInterrupt = Object.prototype.hasOwnProperty.call(interrupt.pending, key);
+  if (!hadPurpose && !hadInterrupt) {
+    return null;
+  }
+  if (hadPurpose) {
+    delete purpose[key];
+  }
+  if (hadInterrupt) {
+    delete interrupt.pending[key];
+  }
+  return OP.writeSession(next);
 }
 
 OP.handleTabRemoved = function (tabId) {
   return enqueue(function () {
     return OP.readSession().then(function (session) {
       return queryTabs().then(function (tabs) {
-        if (!tabs.some(isBilibiliTab)) {
-          if (!sessionHasRound(session)) {
-            return null;
-          }
-          return OP.writeSession(OP.createEmptySessionState());
+        var open = bilibiliTabs(tabs);
+        if (!open.length) {
+          return clearTimerAlarm().then(function () {
+            if (!sessionHasRound(session)) {
+              return null;
+            }
+            return OP.writeSession(OP.createEmptySessionState());
+          });
         }
-        return dropPendingTab(session, tabId);
+        if (!session) {
+          return null;
+        }
+        var next = cloneState(session);
+        var key = String(tabId);
+        var purpose = ensurePendingMap(next);
+        var interrupt = ensureInterrupt(next);
+        var hadPurpose = Object.prototype.hasOwnProperty.call(purpose, key);
+        var hadInterrupt = Object.prototype.hasOwnProperty.call(interrupt.pending, key);
+        if (hadPurpose) {
+          delete purpose[key];
+        }
+        if (hadInterrupt) {
+          delete interrupt.pending[key];
+        }
+        if (interrupt.active && mapEmpty(interrupt.pending)) {
+          return OP.ensureLocalState().then(function (local) {
+            var plan = armTimer(next, local, "again");
+            return OP.writeSession(next).then(function () {
+              return setTimerAlarm(plan.when);
+            });
+          });
+        }
+        if (hadPurpose && mapEmpty(purpose) && next.purposeAnswered && !interrupt.active && ensureTimer(next).mode !== "running") {
+          return OP.ensureLocalState().then(function (local) {
+            var plan = armTimer(next, local, "first");
+            return OP.writeSession(next).then(function () {
+              return setTimerAlarm(plan.when);
+            });
+          });
+        }
+        if (!hadPurpose && !hadInterrupt) {
+          return null;
+        }
+        return OP.writeSession(next);
       }).catch(function () {
-        return dropPendingTab(session, tabId);
+        return dropClosedTab(session, tabId);
+      });
+    });
+  }).catch(function () {
+    return null;
+  });
+};
+
+function findRecordSlot(local, session, tabId) {
+  var interrupt = ensureInterrupt(session);
+  if (!interrupt.active || !Object.prototype.hasOwnProperty.call(interrupt.pending, String(tabId))) {
+    return null;
+  }
+  return interrupt;
+}
+
+OP.handleInterruptCommit = function (message, sender) {
+  return enqueue(function () {
+    var tabId = tabIdFrom(sender);
+    var optionId = message && typeof message.optionId === "string" ? message.optionId : "";
+    var note = message && typeof message.note === "string" ? message.note : "";
+    if (tabId === null || !optionId) {
+      return fail();
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      var option = findOption(next.interruptOptions, optionId);
+      if (!option || option.closesTab || !Array.isArray(next.records)) {
+        return fail();
+      }
+      return loadSession().then(function (session) {
+        if (!findRecordSlot(local, session, tabId)) {
+          return fail();
+        }
+        var record = {
+          id: crypto.randomUUID(),
+          at: Date.now(),
+          source: "interrupt",
+          kind: "option",
+          purposeId: null,
+          optionId: option.id,
+          optionName: option.name,
+          note: note
+        };
+        next.records.push(record);
+        return OP.writeLocal(next).then(function () {
+          delete ensureInterrupt(session).pending[String(tabId)];
+          var pendingLeft = !mapEmpty(session.interrupt.pending);
+          var saved = pendingLeft ? writeSessionOrRollback(next, session, record) : queryTabs().then(function (tabs) {
+            if (!bilibiliTabs(tabs).length) {
+              return clearRound().catch(function () {
+                return rollbackRecord(next, record);
+              });
+            }
+            var plan = armTimer(session, next, "again");
+            return writeSessionOrRollback(next, session, record).then(function () {
+              return setTimerAlarm(plan.when);
+            });
+          });
+          return saved.then(function () {
+            return { ok: true, recordId: record.id };
+          });
+        });
+      });
+    });
+  }).catch(function () {
+    return fail();
+  });
+};
+
+OP.handleInterruptDismiss = function (message, sender) {
+  return enqueue(function () {
+    if (tabIdFrom(sender) === null) {
+      return fail();
+    }
+    return { ok: true };
+  });
+};
+
+OP.handleInterruptCloseTab = function (message, sender) {
+  return enqueue(function () {
+    var tabId = tabIdFrom(sender);
+    if (tabId === null) {
+      return fail();
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      if (!Array.isArray(next.records)) {
+        return fail();
+      }
+      return loadSession().then(function (session) {
+        if (!findRecordSlot(local, session, tabId)) {
+          return fail();
+        }
+        var record = {
+          id: crypto.randomUUID(),
+          at: Date.now(),
+          source: "interrupt",
+          kind: "close-tab",
+          purposeId: null,
+          optionId: null,
+          optionName: "",
+          note: ""
+        };
+        next.records.push(record);
+        return OP.writeLocal(next).then(function () {
+          return removeTab(tabId).catch(function () {
+            return rollbackRecord(next, record);
+          });
+        }).then(function () {
+          return { ok: true, recordId: record.id };
+        });
+      });
+    });
+  }).catch(function () {
+    return fail();
+  });
+};
+
+OP.handleTimerAlarm = function (alarm) {
+  if (!alarm || alarm.name !== OP.ALARM_TIMER) {
+    return Promise.resolve();
+  }
+  return enqueue(function () {
+    return loadSession().then(function (session) {
+      var timer = ensureTimer(session);
+      if (timer.mode !== "running" || typeof timer.startedAt !== "number") {
+        return clearTimerAlarm();
+      }
+      return OP.ensureLocalState().then(function (local) {
+        var minutes = intervalMinutes(local, timer.intervalKind);
+        if (typeof minutes !== "number") {
+          return clearTimerAlarm();
+        }
+        var due = dueAt(timer.startedAt, minutes);
+        if (due > Date.now() + 250) {
+          return setTimerAlarm(due);
+        }
+        return queryTabs().then(function (tabs) {
+          var open = bilibiliTabs(tabs);
+          if (!open.length) {
+            return clearRound();
+          }
+          return startInterruptRound(session, local, open, "timer");
+        });
+      });
+    });
+  }).catch(function () {
+    return null;
+  });
+};
+
+OP.reconcileTimer = function () {
+  return enqueue(function () {
+    return OP.readSession().then(function (stored) {
+      if (!stored || !stored.timer || stored.timer.mode !== "running" || typeof stored.timer.startedAt !== "number") {
+        return clearTimerAlarm();
+      }
+      return OP.ensureLocalState().then(function (local) {
+        var minutes = intervalMinutes(local, stored.timer.intervalKind);
+        if (typeof minutes !== "number") {
+          return clearTimerAlarm();
+        }
+        var due = dueAt(stored.timer.startedAt, minutes);
+        if (due > Date.now()) {
+          return setTimerAlarm(due);
+        }
+        var session = cloneState(stored);
+        return queryTabs().then(function (tabs) {
+          var open = bilibiliTabs(tabs);
+          if (!open.length) {
+            return clearRound();
+          }
+          return startInterruptRound(session, local, open, "timer");
+        });
       });
     });
   }).catch(function () {
@@ -569,6 +1044,15 @@ handlers[OP.MESSAGE.optionUpdate] = function (message) {
 };
 handlers[OP.MESSAGE.optionDelete] = function (message) {
   return OP.handleOptionDelete(message);
+};
+handlers[OP.MESSAGE.interruptCommit] = function (message, sender) {
+  return OP.handleInterruptCommit(message, sender);
+};
+handlers[OP.MESSAGE.interruptDismiss] = function (message, sender) {
+  return OP.handleInterruptDismiss(message, sender);
+};
+handlers[OP.MESSAGE.interruptCloseTab] = function (message, sender) {
+  return OP.handleInterruptCloseTab(message, sender);
 };
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {

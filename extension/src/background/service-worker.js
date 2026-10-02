@@ -8,7 +8,14 @@ importScripts(
 );
 
 OP.ensureLocalState();
+OP.reconcileTimer();
 
 chrome.tabs.onRemoved.addListener(function (tabId) {
   OP.handleTabRemoved(tabId);
+});
+
+chrome.alarms.onAlarm.addListener(function (alarm) {
+  if (alarm && alarm.name === OP.ALARM_TIMER) {
+    OP.handleTimerAlarm(alarm);
+  }
 });

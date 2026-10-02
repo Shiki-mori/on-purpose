@@ -1,5 +1,7 @@
 var OP = globalThis.OP || (globalThis.OP = {});
 
+var waitingInterrupt = null;
+
 function isHtmlDocument() {
   var type = document.contentType || "";
   if (type && type !== "text/html" && type !== "application/xhtml+xml") {
@@ -25,15 +27,46 @@ function onDocumentElement(done) {
   observer.observe(document, { childList: true });
 }
 
+function rememberInterrupt(payload) {
+  waitingInterrupt = {
+    interruptOptions: payload.interruptOptions || [],
+    purposeContrast: payload.purposeContrast || null
+  };
+}
+
+function presentInterrupt(payload) {
+  waitingInterrupt = null;
+  OP.showInterrupt(payload.interruptOptions || [], payload.purposeContrast || null);
+}
+
+function afterPurpose() {
+  if (!waitingInterrupt) {
+    return;
+  }
+  var payload = waitingInterrupt;
+  waitingInterrupt = null;
+  OP.showInterrupt(payload.interruptOptions, payload.purposeContrast);
+}
+
 function announceReady() {
   chrome.runtime.sendMessage({
     type: OP.MESSAGE.contentReady,
     url: location.href
   }, function (response) {
-    if (chrome.runtime.lastError || !response || !response.ok || !response.showPurpose) {
+    if (chrome.runtime.lastError || !response || !response.ok) {
       return;
     }
-    OP.showPurposeInquiry(response.purposes || []);
+    if (response.showInterrupt) {
+      rememberInterrupt(response);
+    }
+    if (response.showPurpose) {
+      OP.onPurposeInquiryClosed = afterPurpose;
+      OP.showPurposeInquiry(response.purposes || []);
+      return;
+    }
+    if (response.showInterrupt) {
+      presentInterrupt(response);
+    }
   });
 }
 
@@ -47,10 +80,29 @@ if (!globalThis.__opContentBound) {
     });
 
     chrome.runtime.onMessage.addListener(function (message) {
-      if (!message || message.type !== OP.MESSAGE.listsChanged || !Array.isArray(message.purposes)) {
+      if (!message) {
         return;
       }
-      OP.refreshPurposeInquiry(message.purposes);
+      if (message.type === OP.MESSAGE.listsChanged) {
+        if (Array.isArray(message.purposes)) {
+          OP.refreshPurposeInquiry(message.purposes);
+        }
+        if (Array.isArray(message.interruptOptions)) {
+          if (waitingInterrupt) {
+            waitingInterrupt.interruptOptions = message.interruptOptions;
+          }
+          OP.refreshInterrupt(message.interruptOptions);
+        }
+        return;
+      }
+      if (message.type === OP.MESSAGE.showInterrupt) {
+        if (OP.isPurposeInquiryOpen()) {
+          rememberInterrupt(message);
+          OP.onPurposeInquiryClosed = afterPurpose;
+          return;
+        }
+        presentInterrupt(message);
+      }
     });
   }
 }
