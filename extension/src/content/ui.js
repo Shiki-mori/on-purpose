@@ -146,11 +146,11 @@ function bindGuards() {
   guardsBound = true;
   ["click", "mousedown", "mouseup", "pointerdown", "pointerup", "auxclick", "contextmenu", "keydown", "keyup", "keypress"].forEach(function (type) {
     window.addEventListener(type, function (event) {
-      if (!host || !host.isConnected) {
+      if (!blocked) {
         return;
       }
       var path = typeof event.composedPath === "function" ? event.composedPath() : [];
-      if (path.indexOf(host) !== -1) {
+      if (host && path.indexOf(host) !== -1) {
         return;
       }
       event.preventDefault();
