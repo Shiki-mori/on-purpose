@@ -60,6 +60,26 @@ function sortedPurposes(purposes) {
   });
 }
 
+function splitPinned(items, pins) {
+  var groups = pins.map(function () {
+    return [];
+  });
+  var rest = [];
+  sortedPurposes(items).forEach(function (item) {
+    var index = pins.indexOf(item.name);
+    if (index === -1) {
+      rest.push(item);
+      return;
+    }
+    groups[index].push(item);
+  });
+  var pinned = [];
+  groups.forEach(function (group) {
+    pinned = pinned.concat(group);
+  });
+  return { pinned: pinned, rest: rest };
+}
+
 function exitFullscreen() {
   var active = document.fullscreenElement || document.webkitFullscreenElement;
   var exit = document.exitFullscreen || document.webkitExitFullscreen;
@@ -195,16 +215,31 @@ function dialogStyle() {
     "}",
     ".dialog {",
     "  box-sizing: border-box;",
+    "  display: flex;",
+    "  flex-direction: column;",
     "  width: min(420px, 100%);",
     "  max-height: calc(100vh - 48px);",
-    "  overflow: auto;",
-    "  overscroll-behavior: contain;",
+    "  overflow: hidden;",
     "  padding: 20px;",
     "  background: var(--op-bg);",
     "  color: var(--op-text);",
     "  border: 1px solid var(--op-line);",
     "  border-radius: 12px;",
     "}",
+    ".choice-scroll {",
+    "  min-height: 0;",
+    "  overflow: auto;",
+    "  overscroll-behavior: contain;",
+    "  flex: 0 1 auto;",
+    "}",
+    ".pin-list {",
+    "  position: sticky;",
+    "  top: 0;",
+    "  z-index: 1;",
+    "  background: var(--op-bg);",
+    "}",
+    ".pin-list:empty { display: none; }",
+    ".pin-list:not(:empty):has(+ ul:not(:empty)) { padding-bottom: 8px; }",
     "h1 {",
     "  margin: 0 0 16px;",
     "  font-size: 18px;",
@@ -373,12 +408,8 @@ function showError(node, message) {
   node.textContent = message;
 }
 
-function renderList() {
-  var list = shadow.querySelector(".purposes");
-  var draft = view.note;
-  var selected = view.selectedId;
-  list.replaceChildren();
-  sortedPurposes(view.purposes).forEach(function (purpose) {
+function renderPurposeItems(list, purposes, draft, selected) {
+  purposes.forEach(function (purpose) {
     var item = element("li");
     var choice = element("button", "choice", purpose.name);
     choice.type = "button";
@@ -393,7 +424,7 @@ function renderList() {
       view.note = "";
       view.commitError = "";
       renderList();
-      var note = list.querySelector("textarea");
+      var note = shadow.querySelector("[data-op-note]");
       if (note) {
         note.focus();
       }
@@ -430,6 +461,21 @@ function renderList() {
     }
     list.appendChild(item);
   });
+}
+
+function renderList() {
+  var pinList = shadow.querySelector(".purposes-pin");
+  var restList = shadow.querySelector(".purposes-rest");
+  if (!pinList || !restList) {
+    return;
+  }
+  var draft = view.note;
+  var selected = view.selectedId;
+  var groups = splitPinned(view.purposes, ["其他"]);
+  pinList.replaceChildren();
+  restList.replaceChildren();
+  renderPurposeItems(pinList, groups.pinned, draft, selected);
+  renderPurposeItems(restList, groups.rest, draft, selected);
 }
 
 function commitPurpose(purposeId) {
@@ -480,7 +526,10 @@ function mountHost() {
   title.id = "op-purpose-title";
   dialog.setAttribute("aria-labelledby", title.id);
   dialog.appendChild(title);
-  dialog.appendChild(element("ul", "purposes"));
+  var scroller = element("div", "choice-scroll");
+  scroller.appendChild(element("ul", "pin-list purposes-pin"));
+  scroller.appendChild(element("ul", "purposes-rest"));
+  dialog.appendChild(scroller);
 
   var form = element("form", "add");
   var label = element("label", "add-label", "添加目的");
@@ -759,15 +808,8 @@ function closeInterrupt() {
   busy = false;
 }
 
-function renderInterrupt() {
-  if (!shadow) {
-    return;
-  }
-  var list = shadow.querySelector(".options");
-  var draft = interruptView.note;
-  var selected = interruptView.selectedId;
-  list.replaceChildren();
-  interruptView.options.forEach(function (option) {
+function renderInterruptItems(list, options, draft, selected) {
+  options.forEach(function (option) {
     var item = element("li");
     var choice = element("button", "choice", option.name);
     choice.type = "button";
@@ -791,7 +833,7 @@ function renderInterrupt() {
       interruptView.note = "";
       interruptView.error = "";
       renderInterrupt();
-      var note = list.querySelector("textarea");
+      var note = shadow.querySelector("#op-interrupt-note");
       if (note) {
         note.focus();
       }
@@ -821,6 +863,24 @@ function renderInterrupt() {
     }
     list.appendChild(item);
   });
+}
+
+function renderInterrupt() {
+  if (!shadow) {
+    return;
+  }
+  var pinList = shadow.querySelector(".options-pin");
+  var restList = shadow.querySelector(".options-rest");
+  if (!pinList || !restList) {
+    return;
+  }
+  var draft = interruptView.note;
+  var selected = interruptView.selectedId;
+  var groups = splitPinned(interruptView.options, ["目的", "其他"]);
+  pinList.replaceChildren();
+  restList.replaceChildren();
+  renderInterruptItems(pinList, groups.pinned, draft, selected);
+  renderInterruptItems(restList, groups.rest, draft, selected);
   showError(shadow.querySelector("[data-op-error='interrupt']"), interruptView.error);
 }
 
@@ -931,7 +991,10 @@ function mountInterrupt() {
     }
     dialog.appendChild(contrast);
   }
-  dialog.appendChild(element("ul", "options"));
+  var scroller = element("div", "choice-scroll");
+  scroller.appendChild(element("ul", "pin-list options-pin"));
+  scroller.appendChild(element("ul", "options-rest"));
+  dialog.appendChild(scroller);
   var error = element("p", "error");
   error.hidden = true;
   error.setAttribute("data-op-error", "interrupt");
