@@ -471,7 +471,7 @@ function renderList() {
   }
   var draft = view.note;
   var selected = view.selectedId;
-  var groups = splitPinned(view.purposes, ["其他"]);
+  var groups = splitPinned(view.purposes, ["其他", "无意识打开"]);
   pinList.replaceChildren();
   restList.replaceChildren();
   renderPurposeItems(pinList, groups.pinned, draft, selected);

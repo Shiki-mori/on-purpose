@@ -3,9 +3,9 @@
 | 项 | 内容 |
 | --- | --- |
 | 文档状态 | 待执行 |
-| 版本 | 0.3 |
+| 版本 | 0.5 |
 | 日期 | 2026-10-11 |
-| 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.6、[系统设计说明书](<../System Design Document/System Design Document.md>) 0.6 |
+| 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.8、[系统设计说明书](<../System Design Document/System Design Document.md>) 0.8 |
 
 本文把需求第 7 节的四步拆成可以依次做完的编码任务。行为以那两份已确认文档为准。本文只规定实现顺序、每项做到哪、以及怎样算做完。
 
@@ -14,6 +14,8 @@
 | 0.1 | 2026-10-03 | 按需求第 7 节与设计第 12 节拆成 7 项编码任务。 |
 | 0.2 | 2026-10-11 | 目录和文案补上日志页与「查看日志」。记录改在日志页查看，以需求 0.5、设计 0.5 为准。已完成任务正文里若仍写弹出页直接列出记录，以这两份文档为准。 |
 | 0.3 | 2026-10-11 | 文案补上日志统计。行为以需求 0.6、设计 0.6 为准。 |
+| 0.4 | 2026-10-11 | 结构版本改为 3，初始目的补上「无意识打开」。行为以需求 0.7、设计 0.7 为准。 |
+| 0.5 | 2026-10-11 | 「无意识打开」改到「其他」之后，结构版本改为 4。行为以需求 0.8、设计 0.8 为准。 |
 
 ## 1. 用法
 
@@ -111,7 +113,7 @@ extension/
 | --- | --- |
 | 本地键 | `localState` |
 | 会话键 | `sessionState` |
-| 结构版本 | `2` |
+| 结构版本 | `4` |
 | 闹钟名 | `timer-due`、`snooze-end` |
 | 名称上限 | 200 |
 | 两个间隔的初始分钟 | `3` |
@@ -133,7 +135,7 @@ extension/
 | --- | --- |
 | `OP.createInitialLocalState()` | 返回播种后的本地状态 |
 | `OP.createEmptySessionState()` | 返回空会话：`roundActive` 为 false，计时 idle，各 pending 为空 |
-| `OP.ensureLocalState()` | 没有 `localState` 时写入种子。已有且 `schemaVersion` 低于 `2` 时按设计第 4.1 节迁移一次，之后不覆盖 |
+| `OP.ensureLocalState()` | 没有 `localState` 时写入种子。已有且 `schemaVersion` 低于 `4` 时按设计第 4.1 节逐级迁移，之后不覆盖 |
 | `OP.readLocal` / `OP.writeLocal` | 读写 `chrome.storage.local` |
 | `OP.readSession` / `OP.writeSession` | 读写 `chrome.storage.session` |
 | `OP.normalizeName(raw)` | 去掉首尾空白。空字符串或超过 200 字则失败 |
@@ -141,7 +143,7 @@ extension/
 | `OP.choiceLabel(local, record)` | 按设计第 4.1 节把一条记录变成展示用的选择文案 |
 | `OP.purposeContrast(local, record)` | 从一条目的记录得到名称和非空备注 |
 
-初始目的 id 为 `purpose-seed-1` 至 `purpose-seed-9`，`order` 为 1 至 9，名称顺序是：学习、游戏攻略、追番、健身、生活经验、关注更新、其他、游戏资讯、娱乐。
+初始目的名称顺序是：学习、游戏攻略、追番、健身、生活经验、关注更新、其他、无意识打开、游戏资讯、娱乐。`purpose-seed-1` 至 `purpose-seed-7` 的 `order` 为 1 至 7。`purpose-seed-10` 是「无意识打开」，`order` 为 8。`purpose-seed-8`「游戏资讯」的 `order` 为 9，`purpose-seed-9`「娱乐」的 `order` 为 10。
 
 初始打断选项：
 

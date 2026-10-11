@@ -45,8 +45,9 @@ OP.createInitialLocalState = function () {
       { id: "purpose-seed-5", name: "生活经验", order: 5 },
       { id: "purpose-seed-6", name: "关注更新", order: 6 },
       { id: "purpose-seed-7", name: "其他", order: 7 },
-      { id: "purpose-seed-8", name: "游戏资讯", order: 8 },
-      { id: "purpose-seed-9", name: "娱乐", order: 9 }
+      { id: "purpose-seed-10", name: "无意识打开", order: 8 },
+      { id: "purpose-seed-8", name: "游戏资讯", order: 9 },
+      { id: "purpose-seed-9", name: "娱乐", order: 10 }
     ],
     interruptOptions: [
       { id: "interrupt-purpose", name: "目的", order: 1, locked: true, closesTab: false },
@@ -121,6 +122,70 @@ function lowestOrder(items) {
   return min === null ? 1 : min;
 }
 
+function findUnconsciousPurpose(purposes) {
+  var byName = null;
+  var index;
+  for (index = 0; index < purposes.length; index += 1) {
+    var item = purposes[index];
+    if (!item) {
+      continue;
+    }
+    if (item.id === "purpose-seed-10") {
+      return item;
+    }
+    if (!byName && item.name === "无意识打开") {
+      byName = item;
+    }
+  }
+  return byName;
+}
+
+function findFirstByName(items, name) {
+  var found = null;
+  items.forEach(function (item) {
+    if (!item || item.name !== name) {
+      return;
+    }
+    if (!found || (item.order || 0) < (found.order || 0)) {
+      found = item;
+    }
+  });
+  return found;
+}
+
+function placeUnconsciousAfterOther(purposes) {
+  var changed = false;
+  var target = findUnconsciousPurpose(purposes);
+  if (!target) {
+    target = { id: "purpose-seed-10", name: "无意识打开", order: 0 };
+    purposes.push(target);
+    changed = true;
+  }
+  var others = purposes.filter(function (item) {
+    return item !== target;
+  });
+  var anchor = findFirstByName(others, "其他");
+  if (!anchor) {
+    var end = highestOrder(others) + 1;
+    if (target.order !== end) {
+      target.order = end;
+      changed = true;
+    }
+    return changed;
+  }
+  if (target.order === anchor.order + 1) {
+    return changed;
+  }
+  var insertAt = anchor.order + 1;
+  others.forEach(function (item) {
+    if (typeof item.order === "number" && item.order >= insertAt) {
+      item.order += 1;
+    }
+  });
+  target.order = insertAt;
+  return true;
+}
+
 function hasIdOrName(items, id, name) {
   return items.some(function (item) {
     return item && (item.id === id || item.name === name);
@@ -134,56 +199,70 @@ OP.migrateLocalState = function (current) {
   if (version >= OP.SCHEMA_VERSION) {
     return { state: next, changed: false };
   }
-  if (!Array.isArray(next.purposes)) {
-    next.purposes = [];
-    changed = true;
-  }
-  [
-    { id: "purpose-seed-8", name: "游戏资讯" },
-    { id: "purpose-seed-9", name: "娱乐" }
-  ].forEach(function (seed) {
-    if (hasIdOrName(next.purposes, seed.id, seed.name)) {
-      return;
-    }
-    next.purposes.push({
-      id: seed.id,
-      name: seed.name,
-      order: highestOrder(next.purposes) + 1
-    });
-    changed = true;
-  });
-  if (!Array.isArray(next.interruptOptions)) {
-    next.interruptOptions = [];
-    changed = true;
-  }
-  if (!hasIdOrName(next.interruptOptions, "interrupt-purpose", "目的")) {
-    next.interruptOptions.push({
-      id: "interrupt-purpose",
-      name: "目的",
-      order: lowestOrder(next.interruptOptions) - 1,
-      locked: true,
-      closesTab: false
-    });
-    changed = true;
-  }
-  if (!next.settings || typeof next.settings !== "object") {
-    next.settings = {
-      firstIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES,
-      againIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES
-    };
-    changed = true;
-  } else {
-    if (next.settings.firstIntervalMinutes === PREVIOUS_DEFAULT_INTERVAL_MINUTES) {
-      next.settings.firstIntervalMinutes = OP.DEFAULT_INTERVAL_MINUTES;
+  if (version < 2) {
+    if (!Array.isArray(next.purposes)) {
+      next.purposes = [];
       changed = true;
     }
-    if (next.settings.againIntervalMinutes === PREVIOUS_DEFAULT_INTERVAL_MINUTES) {
-      next.settings.againIntervalMinutes = OP.DEFAULT_INTERVAL_MINUTES;
+    [
+      { id: "purpose-seed-8", name: "游戏资讯" },
+      { id: "purpose-seed-9", name: "娱乐" }
+    ].forEach(function (seed) {
+      if (hasIdOrName(next.purposes, seed.id, seed.name)) {
+        return;
+      }
+      next.purposes.push({
+        id: seed.id,
+        name: seed.name,
+        order: highestOrder(next.purposes) + 1
+      });
+      changed = true;
+    });
+    if (!Array.isArray(next.interruptOptions)) {
+      next.interruptOptions = [];
       changed = true;
     }
+    if (!hasIdOrName(next.interruptOptions, "interrupt-purpose", "目的")) {
+      next.interruptOptions.push({
+        id: "interrupt-purpose",
+        name: "目的",
+        order: lowestOrder(next.interruptOptions) - 1,
+        locked: true,
+        closesTab: false
+      });
+      changed = true;
+    }
+    if (!next.settings || typeof next.settings !== "object") {
+      next.settings = {
+        firstIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES,
+        againIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES
+      };
+      changed = true;
+    } else {
+      if (next.settings.firstIntervalMinutes === PREVIOUS_DEFAULT_INTERVAL_MINUTES) {
+        next.settings.firstIntervalMinutes = OP.DEFAULT_INTERVAL_MINUTES;
+        changed = true;
+      }
+      if (next.settings.againIntervalMinutes === PREVIOUS_DEFAULT_INTERVAL_MINUTES) {
+        next.settings.againIntervalMinutes = OP.DEFAULT_INTERVAL_MINUTES;
+        changed = true;
+      }
+    }
+    next.schemaVersion = 2;
+    changed = true;
+    version = 2;
   }
-  next.schemaVersion = OP.SCHEMA_VERSION;
-  changed = true;
+  if (version < 4) {
+    if (!Array.isArray(next.purposes)) {
+      next.purposes = [];
+      changed = true;
+    }
+    if (placeUnconsciousAfterOther(next.purposes)) {
+      changed = true;
+    }
+    next.schemaVersion = 4;
+    changed = true;
+  }
   return { state: next, changed: changed };
 };
 

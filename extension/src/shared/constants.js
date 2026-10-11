@@ -2,7 +2,7 @@ var OP = globalThis.OP || (globalThis.OP = {});
 
 OP.LOCAL_KEY = "localState";
 OP.SESSION_KEY = "sessionState";
-OP.SCHEMA_VERSION = 2;
+OP.SCHEMA_VERSION = 4;
 OP.ALARM_TIMER = "timer-due";
 OP.ALARM_SNOOZE = "snooze-end";
 OP.NAME_LIMIT = 200;
