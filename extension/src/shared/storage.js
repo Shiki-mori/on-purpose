@@ -295,6 +295,7 @@ OP.presentRecords = function (local) {
       atText: OP.formatTime(record.at),
       source: record.source,
       sourceLabel: record.source === "interrupt" ? OP.COPY.sourceInterrupt : OP.COPY.sourcePurpose,
+      kind: record.kind,
       choice: OP.choiceLabel(local, record),
       note: record.note || ""
     };

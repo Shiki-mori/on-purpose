@@ -11,6 +11,113 @@ h1 {
   font-weight: 600;
 }
 
+h2 {
+  margin: 28px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+#stats h2 {
+  margin-top: 0;
+}
+
+h3,
+figcaption {
+  margin: 14px 0 0;
+  color: var(--op-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+figcaption {
+  margin: 0 0 8px;
+}
+
+figure {
+  margin: 16px 0 0;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.ranges {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ranges button {
+  border: 1px solid var(--op-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--op-text);
+  padding: 4px 12px;
+}
+
+.ranges button[aria-pressed="true"] {
+  background: var(--op-accent);
+  border-color: var(--op-accent);
+  color: var(--op-bg);
+}
+
+.stat-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.stat-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--op-line);
+  border-radius: 6px;
+  background: var(--op-surface);
+}
+
+.stat-empty,
+.legend-count {
+  color: var(--op-muted);
+}
+
+.pie-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+#pie svg {
+  display: block;
+  width: 180px;
+  height: 180px;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-row + .legend-row {
+  margin-top: 6px;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border: 1px solid var(--op-line);
+  border-radius: 2px;
+}
+
+.legend-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 p,
 li {
   margin: 0;

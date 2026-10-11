@@ -56,5 +56,15 @@ OP.COPY = {
   firstIntervalLabel: "首次打断间隔（分钟）",
   againIntervalLabel: "再次打断间隔（分钟）",
   viewLogs: "查看日志",
-  logsTitle: "日志"
+  logsTitle: "日志",
+  statsHeading: "统计",
+  logsAll: "全部记录",
+  rangeMonth: "本月",
+  rangeRecent: "近30天",
+  topPurpose: "频率最高的目的",
+  topInterrupt: "频率最高的打断选项",
+  statsEmpty: "这段时间没有记录",
+  pieHeading: "记录分布",
+  pieMerged: "较少出现",
+  pieMergedAlt: "更少出现"
 };
