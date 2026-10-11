@@ -53,14 +53,6 @@ function send(type, payload) {
   });
 }
 
-function line(parent, className, text) {
-  var node = document.createElement("p");
-  node.className = className;
-  node.textContent = text;
-  parent.appendChild(node);
-  return node;
-}
-
 function renderOptions(items) {
   var list = document.getElementById("options");
   list.replaceChildren();
@@ -109,23 +101,6 @@ function renderOptions(items) {
 
     row.appendChild(view);
     row.appendChild(error);
-    list.appendChild(row);
-  });
-}
-
-function renderRecords(records) {
-  var list = document.getElementById("records");
-  list.replaceChildren();
-  records.forEach(function (record) {
-    var row = document.createElement("li");
-    row.className = "record";
-    row.setAttribute("data-record-id", record.id);
-    line(row, "record-time", record.atText);
-    line(row, "record-source", record.sourceLabel);
-    line(row, "record-choice", record.choice);
-    if (record.note) {
-      line(row, "record-note", record.note);
-    }
     list.appendChild(row);
   });
 }
@@ -431,7 +406,6 @@ function render(response) {
   });
   renderPurposes(response.purposes);
   renderOptions(response.interruptOptions);
-  renderRecords(response.records);
 }
 
 function load() {
@@ -447,6 +421,10 @@ function load() {
 
 document.getElementById("first-label").textContent = OP.COPY.firstIntervalLabel;
 document.getElementById("again-label").textContent = OP.COPY.againIntervalLabel;
+document.getElementById("view-logs").textContent = OP.COPY.viewLogs;
+document.getElementById("view-logs").addEventListener("click", function () {
+  chrome.tabs.create({ url: chrome.runtime.getURL("src/logs/logs.html") });
+});
 bindInterval("first");
 bindInterval("again");
 document.getElementById("option-form").addEventListener("submit", addOption);

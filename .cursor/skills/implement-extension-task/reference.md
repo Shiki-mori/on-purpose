@@ -21,6 +21,9 @@ extension/
   src/popup/popup.html
   src/popup/popup.js
   src/popup/popup.css
+  src/logs/logs.html
+  src/logs/logs.js
+  src/logs/logs.css
 ```
 
 `importScripts` 顺序：constants、time、storage、bilibili、index、runtime。路径相对于 `service-worker.js`。
@@ -93,5 +96,7 @@ extension/
 | 未生效的暂时关闭按钮 | 暂停 |
 | 生效中的按钮 | 至 HH:mm |
 | 弹出页间隔标签 | 首次打断间隔（分钟）、再次打断间隔（分钟） |
+| 弹出页打开日志 | 查看日志 |
+| 日志页标题 | 日志 |
 
 删除确认用浏览器自己的确认框。

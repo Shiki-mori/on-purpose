@@ -1,3 +1,5 @@
+
+
 #!/usr/bin/env python3
 """Guard extension edits against the assignment-book constraints."""
 
@@ -127,11 +129,15 @@ def violations_in_source(relative, source):
         if re.search(r"\bperformance\.now\s*\(", code):
             found.append("计时用 Date.now() 和 chrome.alarms，不用 performance.now()")
 
-    in_page = "/src/content/" in f"/{posix}" or "/src/popup/" in f"/{posix}"
+    in_page = (
+        "/src/content/" in f"/{posix}"
+        or "/src/popup/" in f"/{posix}"
+        or "/src/logs/" in f"/{posix}"
+    )
     if in_page and re.search(r"\bchrome\.storage\b", code):
-        found.append("弹出页和内容脚本不要调用 chrome.storage，改发给服务工作线程")
-    if posix.endswith("src/popup/popup.html") and re.search(r"storage\.js", source):
-        found.append("弹出页不要载入 storage.js")
+        found.append("弹出页、日志页和内容脚本不要调用 chrome.storage，改发给服务工作线程")
+    if posix.endswith(("src/popup/popup.html", "src/logs/logs.html")) and re.search(r"storage\.js", source):
+        found.append("弹出页和日志页不要载入 storage.js")
     if suffix in {".js", ".html"} and re.search(
         r"\bfetch\s*\(|\bXMLHttpRequest\b|\bsendBeacon\s*\(|\bnew\s+WebSocket\b|\bchrome\.webRequest\b",
         code,

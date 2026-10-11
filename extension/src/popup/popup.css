@@ -155,19 +155,9 @@ ul {
   font-size: 12px;
 }
 
-.record + .record {
-  margin-top: 10px;
-}
-
-.record-time,
-.record-source,
-.record-note {
-  color: var(--op-muted);
-}
-
-.record-note {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+#view-logs {
+  width: 100%;
+  padding: 8px 12px;
 }
 
 #first-label,

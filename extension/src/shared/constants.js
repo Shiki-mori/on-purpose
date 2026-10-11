@@ -54,5 +54,7 @@ OP.COPY = {
   purposeAskTitle: "本次使用的目的是什么",
   interruptTitle: "现在在做什么",
   firstIntervalLabel: "首次打断间隔（分钟）",
-  againIntervalLabel: "再次打断间隔（分钟）"
+  againIntervalLabel: "再次打断间隔（分钟）",
+  viewLogs: "查看日志",
+  logsTitle: "日志"
 };

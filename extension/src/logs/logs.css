@@ -1,0 +1,49 @@
+main {
+  box-sizing: border-box;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+h1 {
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+p,
+li {
+  margin: 0;
+}
+
+p + p {
+  margin-top: 4px;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.record + .record {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--op-line);
+}
+
+.record-time,
+.record-source,
+.record-note {
+  color: var(--op-muted);
+}
+
+.record-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#error {
+  margin-top: 8px;
+  color: var(--op-muted);
+}

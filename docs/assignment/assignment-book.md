@@ -3,15 +3,16 @@
 | 项 | 内容 |
 | --- | --- |
 | 文档状态 | 待执行 |
-| 版本 | 0.1 |
-| 日期 | 2026-10-03 |
-| 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.2、[系统设计说明书](<../System Design Document/System Design Document.md>) 0.2 |
+| 版本 | 0.2 |
+| 日期 | 2026-10-11 |
+| 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.5、[系统设计说明书](<../System Design Document/System Design Document.md>) 0.5 |
 
 本文把需求第 7 节的四步拆成可以依次做完的编码任务。行为以那两份已确认文档为准。本文只规定实现顺序、每项做到哪、以及怎样算做完。
 
 | 版本 | 日期 | 说明 |
 | --- | --- | --- |
 | 0.1 | 2026-10-03 | 按需求第 7 节与设计第 12 节拆成 7 项编码任务。 |
+| 0.2 | 2026-10-11 | 目录和文案补上日志页与「查看日志」。记录改在日志页查看，以需求 0.5、设计 0.5 为准。已完成任务正文里若仍写弹出页直接列出记录，以这两份文档为准。 |
 
 ## 1. 用法
 
@@ -22,7 +23,7 @@
 5. 需求或设计写错时，先改那份已确认文档并留下修订，再改代码。任务书不单独改已经确定的行为。
 6. 环境当时做不到的验收（例如无法让电脑休眠）记在第 13 节备注里。除各任务另行写明的以外，缺行就不能标成已完成。
 
-编码约束同时放在 Cursor 会读取的项目规范里。`.cursor/rules/` 在对话里生效。`.cursor/skills/implement-extension-task/` 写明做当前任务的步骤和共享约定。`.cursor/hooks.json` 会拦住扩展里的 ES Module、弹出页或内容脚本直接读写存储、扩展发起网络请求，以及引入打包工具。任务范围和验收仍以本文为准。
+编码约束同时放在 Cursor 会读取的项目规范里。`.cursor/rules/` 在对话里生效。`.cursor/skills/implement-extension-task/` 写明做当前任务的步骤和共享约定。`.cursor/hooks.json` 会拦住扩展里的 ES Module、弹出页、日志页或内容脚本直接读写存储、扩展发起网络请求，以及引入打包工具。任务范围和验收仍以本文为准。
 
 需求第 7 节的四步与本文任务的对应：
 
@@ -52,10 +53,10 @@
 - 清单版本为 Manifest V3。不引入打包工具，脚本不用 `import` / `export`。共享名字挂在 `globalThis.OP` 上。
 - 服务工作线程用 `importScripts` 载入共享文件。路径相对于 `src/background/service-worker.js`。
 - 内容脚本由清单按这个顺序注入：`constants.js`、`sites/bilibili.js`、`sites/index.js`、`content/ui.js`、`content/content-script.js`。它们在隔离世界，`all_frames` 为 false，`run_at` 为 `document_start`。
-- 弹出页用 `script` 标签载入 `constants.js` 和 `time.js`。弹出页和内容脚本都不调用 `chrome.storage`。要写的数据都发给服务工作线程。
+- 弹出页用 `script` 标签载入 `constants.js` 和 `time.js`。日志页用 `script` 标签载入 `constants.js`。弹出页、日志页和内容脚本都不调用 `chrome.storage`。要写的数据都发给服务工作线程。
 - 服务工作线程用 `sender.tab.id` 识别标签页。
 - 界面文字用中文。第 4 节和需求里已经写死的文案用原文。
-- 目的询问、时长打断、暂时关闭面板、工具栏弹出页只用深色。颜色用设计第 6.1 节那一组。
+- 目的询问、时长打断、暂时关闭面板、工具栏弹出页和日志页只用深色。颜色用设计第 6.1 节那一组。
 - 扩展不把目的、备注、回答、列表或设置发到网络。
 - 写入失败时不关闭询问或打断窗口，提示「没能保存，请再试一次」。「关闭当前标签页」在写入失败时不执行。
 - 名称和分钟数的校验放在服务工作线程。页面上再做一遍相同校验，用来当场提示。
@@ -80,6 +81,9 @@ extension/
   src/popup/popup.html
   src/popup/popup.js
   src/popup/popup.css
+  src/logs/logs.html
+  src/logs/logs.js
+  src/logs/logs.css
 ```
 
 消息 `type` 以设计第 8 节为准，按下表接入。更早的任务不实现后面的处理函数。
@@ -175,6 +179,8 @@ extension/
 | 未生效的暂时关闭按钮 | 暂停 |
 | 生效中的按钮 | 至 HH:mm |
 | 弹出页的两个输入标签 | 首次打断间隔（分钟）、再次打断间隔（分钟） |
+| 弹出页打开日志 | 查看日志 |
+| 日志页标题 | 日志 |
 
 删除确认使用浏览器自己的确认框。
 
