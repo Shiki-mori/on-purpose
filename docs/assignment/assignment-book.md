@@ -3,9 +3,9 @@
 | 项 | 内容 |
 | --- | --- |
 | 文档状态 | 待执行 |
-| 版本 | 0.5 |
+| 版本 | 0.6 |
 | 日期 | 2026-10-11 |
-| 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.8、[系统设计说明书](<../System Design Document/System Design Document.md>) 0.8 |
+| 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.9、[系统设计说明书](<../System Design Document/System Design Document.md>) 0.9 |
 
 本文把需求第 7 节的四步拆成可以依次做完的编码任务。行为以那两份已确认文档为准。本文只规定实现顺序、每项做到哪、以及怎样算做完。
 
@@ -16,6 +16,7 @@
 | 0.3 | 2026-10-11 | 文案补上日志统计。行为以需求 0.6、设计 0.6 为准。 |
 | 0.4 | 2026-10-11 | 结构版本改为 3，初始目的补上「无意识打开」。行为以需求 0.7、设计 0.7 为准。 |
 | 0.5 | 2026-10-11 | 「无意识打开」改到「其他」之后，结构版本改为 4。行为以需求 0.8、设计 0.8 为准。 |
+| 0.6 | 2026-10-11 | 初始打断选项增加五项，结构版本改为 5。行为以需求 0.9、设计 0.9 为准。 |
 
 ## 1. 用法
 
@@ -113,7 +114,7 @@ extension/
 | --- | --- |
 | 本地键 | `localState` |
 | 会话键 | `sessionState` |
-| 结构版本 | `4` |
+| 结构版本 | `5` |
 | 闹钟名 | `timer-due`、`snooze-end` |
 | 名称上限 | 200 |
 | 两个间隔的初始分钟 | `3` |
@@ -135,7 +136,7 @@ extension/
 | --- | --- |
 | `OP.createInitialLocalState()` | 返回播种后的本地状态 |
 | `OP.createEmptySessionState()` | 返回空会话：`roundActive` 为 false，计时 idle，各 pending 为空 |
-| `OP.ensureLocalState()` | 没有 `localState` 时写入种子。已有且 `schemaVersion` 低于 `4` 时按设计第 4.1 节逐级迁移，之后不覆盖 |
+| `OP.ensureLocalState()` | 没有 `localState` 时写入种子。已有且 `schemaVersion` 低于 `5` 时按设计第 4.1 节逐级迁移，之后不覆盖 |
 | `OP.readLocal` / `OP.writeLocal` | 读写 `chrome.storage.local` |
 | `OP.readSession` / `OP.writeSession` | 读写 `chrome.storage.session` |
 | `OP.normalizeName(raw)` | 去掉首尾空白。空字符串或超过 200 字则失败 |
@@ -152,6 +153,11 @@ extension/
 | `interrupt-purpose` | 目的 | 1 | true | false |
 | `interrupt-other` | 其他 | 2 | true | false |
 | `interrupt-close-tab` | 关闭当前标签页 | 3 | true | true |
+| `interrupt-seed-1` | 节奏对立视频 | 4 | false | false |
+| `interrupt-seed-2` | 意义不明的短视频 | 5 | false | false |
+| `interrupt-seed-3` | 游戏短视频 | 6 | false | false |
+| `interrupt-seed-4` | 搞笑视频 | 7 | false | false |
+| `interrupt-seed-5` | 看评论区 | 8 | false | false |
 
 `settings.firstIntervalMinutes` 和 `settings.againIntervalMinutes` 都是 `3`。`snooze.until`、`snoozeButton.xRatio`、`snoozeButton.yRatio` 都是 `null`。`records` 是空数组。`purposeSnapshots` 是空对象。
 

@@ -34,7 +34,7 @@ extension/
 | --- | --- |
 | 本地键 | `localState` |
 | 会话键 | `sessionState` |
-| 结构版本 | `4` |
+| 结构版本 | `5` |
 | 闹钟名 | `timer-due`、`snooze-end` |
 | 名称上限 | 200 |
 | 两个间隔的初始分钟 | `3` |
@@ -62,7 +62,7 @@ extension/
 | --- | --- |
 | `OP.createInitialLocalState()` | 播种后的本地状态 |
 | `OP.createEmptySessionState()` | 空会话：`roundActive` 为 false，计时 idle，各 pending 为空 |
-| `OP.ensureLocalState()` | 没有 `localState` 时写入种子。已有且结构版本低于 `4` 时逐级迁移，之后不覆盖 |
+| `OP.ensureLocalState()` | 没有 `localState` 时写入种子。已有且结构版本低于 `5` 时逐级迁移，之后不覆盖 |
 | `OP.readLocal` / `OP.writeLocal` | 读写 `chrome.storage.local` |
 | `OP.readSession` / `OP.writeSession` | 读写 `chrome.storage.session` |
 | `OP.normalizeName(raw)` | 去掉首尾空白。空或超过 200 字则失败 |
@@ -75,7 +75,7 @@ extension/
 
 初始目的顺序：学习、游戏攻略、追番、健身、生活经验、关注更新、其他、无意识打开、游戏资讯、娱乐。`purpose-seed-10` 是「无意识打开」，`order` 为 8。`purpose-seed-8`、`purpose-seed-9` 的 `order` 为 9、10。
 
-初始打断选项：`interrupt-purpose`（目的，locked，不关闭标签页）、`interrupt-other`（其他，locked，不关闭标签页）、`interrupt-close-tab`（关闭当前标签页，locked，关闭标签页）。
+初始打断选项：`interrupt-purpose`（目的，locked，不关闭标签页）、`interrupt-other`（其他，locked，不关闭标签页）、`interrupt-close-tab`（关闭当前标签页，locked，关闭标签页）。其后五项不锁定、不关闭标签页，id 为 `interrupt-seed-1` 至 `interrupt-seed-5`：节奏对立视频、意义不明的短视频、游戏短视频、搞笑视频、看评论区。
 
 `settings` 两个间隔都是 `3`。`snooze.until` 和按钮的两个 ratio 是 `null`。`records` 为 `[]`。`purposeSnapshots` 为 `{}`。
 

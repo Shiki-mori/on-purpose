@@ -3,9 +3,9 @@
 | 项 | 内容 |
 | --- | --- |
 | 文档状态 | 已确认 |
-| 版本 | 0.8 |
+| 版本 | 0.9 |
 | 日期 | 2026-10-11 |
-| 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.8、[background-完善.md](../background.md/background-完善.md) 第 6 节 |
+| 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.9、[background-完善.md](../background.md/background-完善.md) 第 6 节 |
 
 本文说明扩展如何拆开、数据放在哪里、计时在哪里走、界面如何进到哔哩哔哩页面，以及以后加一个网站要改哪里。需求已经确定的行为不再重开讨论。D-1、D-2、D-3 已确认，并写入正文。第 10 节只保留确认记录。
 
@@ -19,6 +19,7 @@
 | 0.6 | 2026-10-11 | 日志页按本月或近 30 天统计频率并画饼图。低频扇区合并为「较少出现」。不升结构版本。 |
 | 0.7 | 2026-10-11 | 初始目的增加「无意识打开」。结构版本 3 只追加这一项，不改已有分钟数和列表。 |
 | 0.8 | 2026-10-11 | 「无意识打开」的顺序改到「其他」之后。询问窗口在「其他」下面固定这一项。结构版本改为 4。 |
+| 0.9 | 2026-10-11 | 初始打断选项增加五项，不锁定。结构版本 5 只追加还没有的项，不改已有顺序和分钟数。 |
 
 ## 1. 运行形态
 
@@ -112,7 +113,7 @@ extension/
 
 | 字段 | 含义 |
 | --- | --- |
-| `schemaVersion` | 数字。当前为 `4`。以后改字段时在服务工作线程里迁移 |
+| `schemaVersion` | 数字。当前为 `5`。以后改字段时在服务工作线程里迁移 |
 | `purposes` | 目的数组。每项有 `id`、`name`、`order` |
 | `interruptOptions` | 打断选项数组。每项有 `id`、`name`、`order`、`locked`、`closesTab` |
 | `settings.firstIntervalMinutes` | 首次打断间隔，初始 `3` |
@@ -122,11 +123,13 @@ extension/
 | `records` | 只追加的记录数组 |
 | `purposeSnapshots` | 对象。目的被删除时，把当时的名称记在 `purposeSnapshots[id]` |
 
-新安装、本地还没有 `localState` 时写入初始值，结构版本为 `4`。已有数据按版本逐级迁移，不覆盖已经改过的分钟数。
+新安装、本地还没有 `localState` 时写入初始值，结构版本为 `5`。已有数据按版本逐级迁移，不覆盖已经改过的分钟数。
 
 低于 `2` 时：补上缺少的「游戏资讯」「娱乐」，以及锁定的打断选项「目的」；两个间隔里仍等于旧默认值 `5` 的那一处改为 `3`。已经改过的名称、已经删除的项、以及不是 `5` 的分钟数保持不变。若当时已经有名为「目的」的打断选项，或已经有同名目的，则不另加一项。完成后写入 `schemaVersion` `2`。
 
-低于 `4` 时：若还没有名为「无意识打开」的目的，也没有 id `purpose-seed-10`，则补上 `purpose-seed-10`。然后把它的 `order` 放到名称为「其他」且 `order` 最小的那一项后面，原本大于等于这个新位置的项各加 1。已经紧挨在那一项后面时不再移动。当时没有名为「其他」的目的，则放在列表末尾。这次不改间隔和打断选项。完成后写入 `schemaVersion` `4`。之后重新加载不再播种。
+低于 `4` 时：若还没有名为「无意识打开」的目的，也没有 id `purpose-seed-10`，则补上 `purpose-seed-10`。然后把它的 `order` 放到名称为「其他」且 `order` 最小的那一项后面，原本大于等于这个新位置的项各加 1。已经紧挨在那一项后面时不再移动。当时没有名为「其他」的目的，则放在列表末尾。这次不改间隔和打断选项。完成后写入 `schemaVersion` `4`。
+
+低于 `5` 时：按「节奏对立视频」「意义不明的短视频」「游戏短视频」「搞笑视频」「看评论区」的顺序，把还没有的打断选项追加到当时列表末尾。id 依次是 `interrupt-seed-1` 至 `interrupt-seed-5`。`locked` 为 false，`closesTab` 为 false。已经有同名选项或对应 id 的不另加。不改已有选项的名称、顺序和锁定状态，也不改间隔。完成后写入 `schemaVersion` `5`。之后重新加载不再播种。
 
 初始目的的名称顺序是：学习、游戏攻略、追番、健身、生活经验、关注更新、其他、无意识打开、游戏资讯、娱乐。id 仍是 `purpose-seed-1` 至 `purpose-seed-7`，然后 `purpose-seed-10`（无意识打开，`order` 8）、`purpose-seed-8`（游戏资讯，`order` 9）、`purpose-seed-9`（娱乐，`order` 10）。记录保存 id。目的还在时，展示层读当前名称，所以改名后旧记录显示新名称。
 
@@ -137,8 +140,13 @@ extension/
 | `interrupt-purpose` | 目的 | true | false |
 | `interrupt-other` | 其他 | true | false |
 | `interrupt-close-tab` | 关闭当前标签页 | true | true |
+| `interrupt-seed-1` | 节奏对立视频 | false | false |
+| `interrupt-seed-2` | 意义不明的短视频 | false | false |
+| `interrupt-seed-3` | 游戏短视频 | false | false |
+| `interrupt-seed-4` | 搞笑视频 | false | false |
+| `interrupt-seed-5` | 看评论区 | false | false |
 
-`locked` 为 true 的项不提供改名和删除。使用者后来添加的项 `locked` 为 false，`closesTab` 为 false。
+`locked` 为 true 的项不提供改名和删除。上面五项 `locked` 为 false 的初始选项，以及使用者后来添加的项，可以改名和删除，`closesTab` 为 false。
 
 记录：
 
@@ -439,7 +447,7 @@ extension/
 | 全屏 | 显示询问或打断前先退出全屏 |
 | 删除目的或自定义打断选项 | 弹出页里先用确认框确认 |
 | 两个脚本之间的依赖 | 不用打包器，不用 ES Module |
-| 播种时机 | 没有 `localState` 时写入种子。已有且 `schemaVersion` 低于 `4` 时按第 4.1 节逐级迁移：低于 `2` 时补充当时的新项并把仍为 `5` 的间隔改为 `3`；低于 `4` 时补上「无意识打开」并放到「其他」之后 |
+| 播种时机 | 没有 `localState` 时写入种子。已有且 `schemaVersion` 低于 `5` 时按第 4.1 节逐级迁移：低于 `2` 时补充当时的新项并把仍为 `5` 的间隔改为 `3`；低于 `4` 时补上「无意识打开」并放到「其他」之后；低于 `5` 时追加还没有的五项打断选项 |
 
 ## 12. 与开发步骤的对应
 

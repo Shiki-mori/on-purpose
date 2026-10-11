@@ -52,7 +52,12 @@ OP.createInitialLocalState = function () {
     interruptOptions: [
       { id: "interrupt-purpose", name: "目的", order: 1, locked: true, closesTab: false },
       { id: "interrupt-other", name: "其他", order: 2, locked: true, closesTab: false },
-      { id: "interrupt-close-tab", name: "关闭当前标签页", order: 3, locked: true, closesTab: true }
+      { id: "interrupt-close-tab", name: "关闭当前标签页", order: 3, locked: true, closesTab: true },
+      { id: "interrupt-seed-1", name: "节奏对立视频", order: 4, locked: false, closesTab: false },
+      { id: "interrupt-seed-2", name: "意义不明的短视频", order: 5, locked: false, closesTab: false },
+      { id: "interrupt-seed-3", name: "游戏短视频", order: 6, locked: false, closesTab: false },
+      { id: "interrupt-seed-4", name: "搞笑视频", order: 7, locked: false, closesTab: false },
+      { id: "interrupt-seed-5", name: "看评论区", order: 8, locked: false, closesTab: false }
     ],
     settings: {
       firstIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES,
@@ -261,6 +266,34 @@ OP.migrateLocalState = function (current) {
       changed = true;
     }
     next.schemaVersion = 4;
+    changed = true;
+    version = 4;
+  }
+  if (version < 5) {
+    if (!Array.isArray(next.interruptOptions)) {
+      next.interruptOptions = [];
+      changed = true;
+    }
+    [
+      { id: "interrupt-seed-1", name: "节奏对立视频" },
+      { id: "interrupt-seed-2", name: "意义不明的短视频" },
+      { id: "interrupt-seed-3", name: "游戏短视频" },
+      { id: "interrupt-seed-4", name: "搞笑视频" },
+      { id: "interrupt-seed-5", name: "看评论区" }
+    ].forEach(function (seed) {
+      if (hasIdOrName(next.interruptOptions, seed.id, seed.name)) {
+        return;
+      }
+      next.interruptOptions.push({
+        id: seed.id,
+        name: seed.name,
+        order: highestOrder(next.interruptOptions) + 1,
+        locked: false,
+        closesTab: false
+      });
+      changed = true;
+    });
+    next.schemaVersion = 5;
     changed = true;
   }
   return { state: next, changed: changed };
