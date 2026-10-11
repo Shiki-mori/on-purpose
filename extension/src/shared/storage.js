@@ -44,11 +44,14 @@ OP.createInitialLocalState = function () {
       { id: "purpose-seed-4", name: "健身", order: 4 },
       { id: "purpose-seed-5", name: "生活经验", order: 5 },
       { id: "purpose-seed-6", name: "关注更新", order: 6 },
-      { id: "purpose-seed-7", name: "其他", order: 7 }
+      { id: "purpose-seed-7", name: "其他", order: 7 },
+      { id: "purpose-seed-8", name: "游戏资讯", order: 8 },
+      { id: "purpose-seed-9", name: "娱乐", order: 9 }
     ],
     interruptOptions: [
-      { id: "interrupt-other", name: "其他", order: 1, locked: true, closesTab: false },
-      { id: "interrupt-close-tab", name: "关闭当前标签页", order: 2, locked: true, closesTab: true }
+      { id: "interrupt-purpose", name: "目的", order: 1, locked: true, closesTab: false },
+      { id: "interrupt-other", name: "其他", order: 2, locked: true, closesTab: false },
+      { id: "interrupt-close-tab", name: "关闭当前标签页", order: 3, locked: true, closesTab: true }
     ],
     settings: {
       firstIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES,
@@ -96,15 +99,109 @@ OP.writeSession = function (state) {
   return storageSet(chrome.storage.session, OP.SESSION_KEY, state);
 };
 
+var PREVIOUS_DEFAULT_INTERVAL_MINUTES = 5;
+
+function highestOrder(items) {
+  var max = 0;
+  items.forEach(function (item) {
+    if (item && typeof item.order === "number" && item.order > max) {
+      max = item.order;
+    }
+  });
+  return max;
+}
+
+function lowestOrder(items) {
+  var min = null;
+  items.forEach(function (item) {
+    if (item && typeof item.order === "number" && (min === null || item.order < min)) {
+      min = item.order;
+    }
+  });
+  return min === null ? 1 : min;
+}
+
+function hasIdOrName(items, id, name) {
+  return items.some(function (item) {
+    return item && (item.id === id || item.name === name);
+  });
+}
+
+OP.migrateLocalState = function (current) {
+  var next = JSON.parse(JSON.stringify(current));
+  var changed = false;
+  var version = typeof next.schemaVersion === "number" ? next.schemaVersion : 1;
+  if (version >= OP.SCHEMA_VERSION) {
+    return { state: next, changed: false };
+  }
+  if (!Array.isArray(next.purposes)) {
+    next.purposes = [];
+    changed = true;
+  }
+  [
+    { id: "purpose-seed-8", name: "游戏资讯" },
+    { id: "purpose-seed-9", name: "娱乐" }
+  ].forEach(function (seed) {
+    if (hasIdOrName(next.purposes, seed.id, seed.name)) {
+      return;
+    }
+    next.purposes.push({
+      id: seed.id,
+      name: seed.name,
+      order: highestOrder(next.purposes) + 1
+    });
+    changed = true;
+  });
+  if (!Array.isArray(next.interruptOptions)) {
+    next.interruptOptions = [];
+    changed = true;
+  }
+  if (!hasIdOrName(next.interruptOptions, "interrupt-purpose", "目的")) {
+    next.interruptOptions.push({
+      id: "interrupt-purpose",
+      name: "目的",
+      order: lowestOrder(next.interruptOptions) - 1,
+      locked: true,
+      closesTab: false
+    });
+    changed = true;
+  }
+  if (!next.settings || typeof next.settings !== "object") {
+    next.settings = {
+      firstIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES,
+      againIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES
+    };
+    changed = true;
+  } else {
+    if (next.settings.firstIntervalMinutes === PREVIOUS_DEFAULT_INTERVAL_MINUTES) {
+      next.settings.firstIntervalMinutes = OP.DEFAULT_INTERVAL_MINUTES;
+      changed = true;
+    }
+    if (next.settings.againIntervalMinutes === PREVIOUS_DEFAULT_INTERVAL_MINUTES) {
+      next.settings.againIntervalMinutes = OP.DEFAULT_INTERVAL_MINUTES;
+      changed = true;
+    }
+  }
+  next.schemaVersion = OP.SCHEMA_VERSION;
+  changed = true;
+  return { state: next, changed: changed };
+};
+
 OP.ensureLocalState = function () {
   if (!ensurePromise) {
     ensurePromise = OP.readLocal().then(function (current) {
-      if (current) {
+      if (!current) {
+        var initial = OP.createInitialLocalState();
+        return OP.writeLocal(initial).then(function () {
+          return initial;
+        });
+      }
+      var migrated = OP.migrateLocalState(current);
+      if (!migrated.changed) {
         return current;
       }
-      var initial = OP.createInitialLocalState();
-      return OP.writeLocal(initial).then(function () {
-        return initial;
+      return OP.writeLocal(migrated.state).then(function () {
+        return migrated.state;
       });
     }).finally(function () {
       ensurePromise = null;

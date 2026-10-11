@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "有目的",
+  "name": "On Purpose",
   "version": "0.1.0",
   "description": "在哔哩哔哩上询问目的并到时打断",
   "permissions": ["storage", "alarms", "tabs"],
@@ -12,7 +12,7 @@
     "service_worker": "src/background/service-worker.js"
   },
   "action": {
-    "default_title": "有目的",
+    "default_title": "On Purpose",
     "default_popup": "src/popup/popup.html",
     "default_icon": {
       "128": "icons/icon128.png"

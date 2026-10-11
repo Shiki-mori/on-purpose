@@ -31,10 +31,10 @@ extension/
 | --- | --- |
 | 本地键 | `localState` |
 | 会话键 | `sessionState` |
-| 结构版本 | `1` |
+| 结构版本 | `2` |
 | 闹钟名 | `timer-due`、`snooze-end` |
 | 名称上限 | 200 |
-| 两个间隔的初始分钟 | `5` |
+| 两个间隔的初始分钟 | `3` |
 | 暂时关闭预设 | `10`、`30` |
 | 自定义分钟框每次打开的显示值 | `10` |
 | 关掉打断窗口后再次出现 | `5000` 毫秒 |
@@ -59,7 +59,7 @@ extension/
 | --- | --- |
 | `OP.createInitialLocalState()` | 播种后的本地状态 |
 | `OP.createEmptySessionState()` | 空会话：`roundActive` 为 false，计时 idle，各 pending 为空 |
-| `OP.ensureLocalState()` | 没有 `localState` 时写入种子；已有则不覆盖 |
+| `OP.ensureLocalState()` | 没有 `localState` 时写入种子。已有且结构版本低于 `2` 时迁移一次，之后不覆盖 |
 | `OP.readLocal` / `OP.writeLocal` | 读写 `chrome.storage.local` |
 | `OP.readSession` / `OP.writeSession` | 读写 `chrome.storage.session` |
 | `OP.normalizeName(raw)` | 去掉首尾空白。空或超过 200 字则失败 |
@@ -70,11 +70,11 @@ extension/
 
 `sites/bilibili.js` 提供 `id`、`matches`、`isHome`、`isPrimary`、`entry`、`pausePlayback`。`entry` 为 `all`。`pausePlayback` 暂停顶层正在播放的 `video`，并返回只恢复这些元素的函数。`play()` 被拒绝时忽略。
 
-初始目的 id 为 `purpose-seed-1` 至 `purpose-seed-7`，顺序：学习、游戏攻略、追番、健身、生活经验、关注更新、其他。
+初始目的 id 为 `purpose-seed-1` 至 `purpose-seed-9`，顺序：学习、游戏攻略、追番、健身、生活经验、关注更新、其他、游戏资讯、娱乐。
 
-初始打断选项：`interrupt-other`（其他，locked，不关闭标签页）、`interrupt-close-tab`（关闭当前标签页，locked，关闭标签页）。
+初始打断选项：`interrupt-purpose`（目的，locked，不关闭标签页）、`interrupt-other`（其他，locked，不关闭标签页）、`interrupt-close-tab`（关闭当前标签页，locked，关闭标签页）。
 
-`settings` 两个间隔都是 `5`。`snooze.until` 和按钮的两个 ratio 是 `null`。`records` 为 `[]`。`purposeSnapshots` 为 `{}`。
+`settings` 两个间隔都是 `3`。`snooze.until` 和按钮的两个 ratio 是 `null`。`records` 为 `[]`。`purposeSnapshots` 为 `{}`。
 
 时间用 `Date.now()`。本机时区：记录到秒 `YYYY-MM-DD HH:mm:ss`，按钮 `HH:mm`，截止日期 `YYYY-MM-DD HH:mm`。
 

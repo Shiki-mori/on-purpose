@@ -3,9 +3,9 @@
 | 项 | 内容 |
 | --- | --- |
 | 文档状态 | 已确认 |
-| 版本 | 0.3 |
+| 版本 | 0.4 |
 | 日期 | 2026-10-11 |
-| 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.3、[background-完善.md](../background.md/background-完善.md) 第 6 节 |
+| 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.4、[background-完善.md](../background.md/background-完善.md) 第 6 节 |
 
 本文说明扩展如何拆开、数据放在哪里、计时在哪里走、界面如何进到哔哩哔哩页面，以及以后加一个网站要改哪里。需求已经确定的行为不再重开讨论。D-1、D-2、D-3 已确认，并写入正文。第 10 节只保留确认记录。
 
@@ -14,6 +14,7 @@
 | 0.1 | 2026-10-02 | 初稿，D-1 至 D-3 待确认。 |
 | 0.2 | 2026-10-03 | 确认 D-1 甲、D-2 甲、D-3 乙。 |
 | 0.3 | 2026-10-11 | 询问窗口固定「其他」；打断窗口固定「目的」和「其他」。只改显示，不改 `order`。 |
+| 0.4 | 2026-10-11 | 扩展名改为 On Purpose。种子增加两个目的和锁定的打断选项「目的」。间隔初始值改为 3。结构版本 2 做一次补充，不覆盖已改过的列表和分钟数。 |
 
 ## 1. 运行形态
 
@@ -80,7 +81,7 @@ extension/
 | 项 | 值 |
 | --- | --- |
 | `manifest_version` | `3` |
-| `name` | 有目的 |
+| `name` | On Purpose |
 | `permissions` | `storage`、`alarms`、`tabs` |
 | `host_permissions` | `https://*.bilibili.com/*`、`https://bilibili.com/*` |
 | `background.service_worker` | `src/background/service-worker.js` |
@@ -102,24 +103,25 @@ extension/
 
 | 字段 | 含义 |
 | --- | --- |
-| `schemaVersion` | 数字。第一版为 `1`。以后改字段时在服务工作线程里迁移 |
+| `schemaVersion` | 数字。当前为 `2`。以后改字段时在服务工作线程里迁移 |
 | `purposes` | 目的数组。每项有 `id`、`name`、`order` |
 | `interruptOptions` | 打断选项数组。每项有 `id`、`name`、`order`、`locked`、`closesTab` |
-| `settings.firstIntervalMinutes` | 首次打断间隔，初始 `5` |
-| `settings.againIntervalMinutes` | 再次打断间隔，初始 `5` |
+| `settings.firstIntervalMinutes` | 首次打断间隔，初始 `3` |
+| `settings.againIntervalMinutes` | 再次打断间隔，初始 `3` |
 | `snooze.until` | 暂时关闭的截止时间，毫秒时间戳。未启用时为 `null` |
 | `snoozeButton.xRatio` / `yRatio` | 按钮在视口中的相对位置，`0` 到 `1`。尚未拖动时为 `null`，界面用右下角默认位置 |
 | `records` | 只追加的记录数组 |
 | `purposeSnapshots` | 对象。目的被删除时，把当时的名称记在 `purposeSnapshots[id]` |
 
-新安装、本地还没有 `localState` 时写入初始值。重新加载扩展不会重新播种，以免覆盖已经改过的列表。
+新安装、本地还没有 `localState` 时写入初始值。已有数据在 `schemaVersion` 低于 `2` 时做一次迁移：补上缺少的「游戏资讯」「娱乐」，以及锁定的打断选项「目的」；两个间隔里仍等于旧默认值 `5` 的那一处改为 `3`。已经改过的名称、已经删除的项、以及不是 `5` 的分钟数保持不变。若当时已经有名为「目的」的打断选项，或已经有同名目的，则不另加一项。迁移完成后写入 `schemaVersion` `2`。之后重新加载不再播种，以免覆盖已经改过的列表。
 
-初始目的 id 固定为 `purpose-seed-1` 至 `purpose-seed-7`，名称顺序对应：学习、游戏攻略、追番、健身、生活经验、关注更新、其他。记录保存 id。目的还在时，展示层读当前名称，所以改名后旧记录显示新名称。
+初始目的 id 固定为 `purpose-seed-1` 至 `purpose-seed-9`，名称顺序对应：学习、游戏攻略、追番、健身、生活经验、关注更新、其他、游戏资讯、娱乐。记录保存 id。目的还在时，展示层读当前名称，所以改名后旧记录显示新名称。
 
 初始打断选项：
 
 | id | 名称 | locked | closesTab |
 | --- | --- | --- | --- |
+| `interrupt-purpose` | 目的 | true | false |
 | `interrupt-other` | 其他 | true | false |
 | `interrupt-close-tab` | 关闭当前标签页 | true | true |
 
@@ -328,7 +330,7 @@ extension/
 
 1. **间隔。** 「首次打断间隔（分钟）」和「再次打断间隔（分钟）」。输入框失焦或按下 Enter 时提交。不合法则保持原值并显示提示。
 2. **目的。** 列出全部目的，每行可以改名或删除。没有添加框。删除前用浏览器的确认框问一次。改名、删除成功后，服务工作线程通知已打开的哔哩哔哩标签页刷新正在显示的目的列表。
-3. **打断选项。** 顶部有添加框。锁定的两项只显示名称。其余项可以改名和删除，删除前同样确认。
+3. **打断选项。** 顶部有添加框。锁定的「目的」「其他」和「关闭当前标签页」只显示名称。其余项可以改名和删除，删除前同样确认。
 4. **记录。** 新的在前，每条显示时间、来源（「目的询问」或「时长打断」）、选择或回答、非空备注。没有删除控件。
 
 弹出页打开时向服务工作线程要一份本地数据的只读副本。所有修改都走消息。
@@ -399,7 +401,7 @@ extension/
 
 | 事项 | 做法 |
 | --- | --- |
-| 扩展在工具栏上的名字 | 有目的 |
+| 扩展在工具栏上的名字 | On Purpose |
 | 界面隔离 | Shadow DOM |
 | 按钮位置 | 相对视口的比例，而不是固定像素，避免换页后跑出屏幕 |
 | 未拖动时的位置 | 距右缘和下缘各 24 像素 |
@@ -411,7 +413,7 @@ extension/
 | 全屏 | 显示询问或打断前先退出全屏 |
 | 删除目的或自定义打断选项 | 弹出页里先用确认框确认 |
 | 两个脚本之间的依赖 | 不用打包器，不用 ES Module |
-| 播种时机 | 仅当本地还没有 `localState` |
+| 播种时机 | 没有 `localState` 时写入种子。已有且 `schemaVersion` 低于 `2` 时只补充第 4.1 节写的新项，并把仍为 `5` 的间隔改为 `3` |
 
 ## 12. 与开发步骤的对应
 

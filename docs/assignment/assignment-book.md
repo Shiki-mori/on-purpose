@@ -106,10 +106,10 @@ extension/
 | --- | --- |
 | 本地键 | `localState` |
 | 会话键 | `sessionState` |
-| 结构版本 | `1` |
+| 结构版本 | `2` |
 | 闹钟名 | `timer-due`、`snooze-end` |
 | 名称上限 | 200 |
-| 两个间隔的初始分钟 | `5` |
+| 两个间隔的初始分钟 | `3` |
 | 暂时关闭预设 | `10`、`30` |
 | 自定义分钟框每次打开时的显示值 | `10` |
 | 关掉打断窗口后再次出现 | `5000` 毫秒 |
@@ -128,7 +128,7 @@ extension/
 | --- | --- |
 | `OP.createInitialLocalState()` | 返回播种后的本地状态 |
 | `OP.createEmptySessionState()` | 返回空会话：`roundActive` 为 false，计时 idle，各 pending 为空 |
-| `OP.ensureLocalState()` | 没有 `localState` 时写入种子。已有则原样读出，不覆盖 |
+| `OP.ensureLocalState()` | 没有 `localState` 时写入种子。已有且 `schemaVersion` 低于 `2` 时按设计第 4.1 节迁移一次，之后不覆盖 |
 | `OP.readLocal` / `OP.writeLocal` | 读写 `chrome.storage.local` |
 | `OP.readSession` / `OP.writeSession` | 读写 `chrome.storage.session` |
 | `OP.normalizeName(raw)` | 去掉首尾空白。空字符串或超过 200 字则失败 |
@@ -136,16 +136,17 @@ extension/
 | `OP.choiceLabel(local, record)` | 按设计第 4.1 节把一条记录变成展示用的选择文案 |
 | `OP.purposeContrast(local, record)` | 从一条目的记录得到名称和非空备注 |
 
-初始目的 id 为 `purpose-seed-1` 至 `purpose-seed-7`，`order` 为 1 至 7，名称顺序是：学习、游戏攻略、追番、健身、生活经验、关注更新、其他。
+初始目的 id 为 `purpose-seed-1` 至 `purpose-seed-9`，`order` 为 1 至 9，名称顺序是：学习、游戏攻略、追番、健身、生活经验、关注更新、其他、游戏资讯、娱乐。
 
 初始打断选项：
 
 | id | 名称 | order | locked | closesTab |
 | --- | --- | --- | --- | --- |
-| `interrupt-other` | 其他 | 1 | true | false |
-| `interrupt-close-tab` | 关闭当前标签页 | 2 | true | true |
+| `interrupt-purpose` | 目的 | 1 | true | false |
+| `interrupt-other` | 其他 | 2 | true | false |
+| `interrupt-close-tab` | 关闭当前标签页 | 3 | true | true |
 
-`settings.firstIntervalMinutes` 和 `settings.againIntervalMinutes` 都是 `5`。`snooze.until`、`snoozeButton.xRatio`、`snoozeButton.yRatio` 都是 `null`。`records` 是空数组。`purposeSnapshots` 是空对象。
+`settings.firstIntervalMinutes` 和 `settings.againIntervalMinutes` 都是 `3`。`snooze.until`、`snoozeButton.xRatio`、`snoozeButton.yRatio` 都是 `null`。`records` 是空数组。`purposeSnapshots` 是空对象。
 
 ### 4.3 时间与站点
 
