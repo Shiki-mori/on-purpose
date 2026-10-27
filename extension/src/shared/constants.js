@@ -10,6 +10,7 @@ OP.DEFAULT_INTERVAL_MINUTES = 3;
 OP.PRESET_SNOOZE_MINUTES = [10, 30];
 OP.DEFAULT_SNOOZE_INPUT_MINUTES = 10;
 OP.REDISPLAY_MS = 5000;
+OP.ENTERTAINMENT_CLOSE_PROBABILITY = 0.6;
 OP.DRAG_THRESHOLD_PX = 4;
 OP.BUTTON_MARGIN_PX = 24;
 OP.BUTTON_EDGE_PX = 8;
@@ -30,6 +31,7 @@ OP.MESSAGE = {
   contentReady: "content-ready",
   purposeAdd: "purpose-add",
   purposeCommit: "purpose-commit",
+  purposeSelect: "purpose-select",
   purposeSkip: "purpose-skip",
   purposeUpdate: "purpose-update",
   purposeDelete: "purpose-delete",
@@ -39,6 +41,7 @@ OP.MESSAGE = {
   optionUpdate: "option-update",
   optionDelete: "option-delete",
   interruptCommit: "interrupt-commit",
+  interruptSelect: "interrupt-select",
   interruptDismiss: "interrupt-dismiss",
   interruptCloseTab: "interrupt-close-tab",
   showInterrupt: "show-interrupt",

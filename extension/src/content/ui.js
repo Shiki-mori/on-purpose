@@ -420,14 +420,23 @@ function renderPurposeItems(list, purposes, draft, selected) {
       if (busy || view.selectedId === purpose.id) {
         return;
       }
-      view.selectedId = purpose.id;
-      view.note = "";
-      view.commitError = "";
-      renderList();
-      var note = shadow.querySelector("[data-op-note]");
-      if (note) {
-        note.focus();
-      }
+      busy = true;
+      send(OP.MESSAGE.purposeSelect, { purposeId: purpose.id }).then(function (response) {
+        busy = false;
+        view.skipError = response.ok ? "" : response.error || OP.COPY.saveFailed;
+        showError(shadow && shadow.querySelector("[data-op-error='skip']"), view.skipError);
+        if (!response.ok || response.closed) {
+          return;
+        }
+        view.selectedId = purpose.id;
+        view.note = "";
+        view.commitError = "";
+        renderList();
+        var note = shadow.querySelector("[data-op-note]");
+        if (note) {
+          note.focus();
+        }
+      });
     });
     item.appendChild(choice);
     if (pressed) {
@@ -829,14 +838,22 @@ function renderInterruptItems(list, options, draft, selected) {
       if (busy || interruptView.selectedId === option.id) {
         return;
       }
-      interruptView.selectedId = option.id;
-      interruptView.note = "";
-      interruptView.error = "";
-      renderInterrupt();
-      var note = shadow.querySelector("#op-interrupt-note");
-      if (note) {
-        note.focus();
-      }
+      busy = true;
+      send(OP.MESSAGE.interruptSelect, { optionId: option.id }).then(function (response) {
+        busy = false;
+        interruptView.error = response.ok ? "" : response.error || OP.COPY.saveFailed;
+        showError(shadow && shadow.querySelector("[data-op-error='interrupt']"), interruptView.error);
+        if (!response.ok || response.closed) {
+          return;
+        }
+        interruptView.selectedId = option.id;
+        interruptView.note = "";
+        renderInterrupt();
+        var note = shadow.querySelector("#op-interrupt-note");
+        if (note) {
+          note.focus();
+        }
+      });
     });
     item.appendChild(choice);
     if (pressed) {

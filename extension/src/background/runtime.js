@@ -528,6 +528,56 @@ OP.handlePurposeCommit = function (message, sender) {
   });
 };
 
+function saveSelectionAndClose(local, record, tabId) {
+  local.records.push(record);
+  return OP.writeLocal(local).then(function () {
+    return removeTab(tabId).catch(function () {
+      return rollbackRecord(local, record);
+    });
+  }).then(function () {
+    return { ok: true, closed: true, recordId: record.id };
+  });
+}
+
+OP.handlePurposeSelect = function (message, sender) {
+  return enqueue(function () {
+    var tabId = tabIdFrom(sender);
+    var purposeId = message && typeof message.purposeId === "string" ? message.purposeId : "";
+    if (tabId === null || !purposeId) {
+      return fail();
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      var purpose = findPurpose(next.purposes || [], purposeId);
+      if (!purpose || !Array.isArray(next.records)) {
+        return fail();
+      }
+      return loadSession().then(function (session) {
+        if (!Object.prototype.hasOwnProperty.call(ensurePendingMap(session), String(tabId))) {
+          return fail();
+        }
+        var closesTab = purpose.name === "无意识打开" ||
+          (purpose.name === "娱乐" && Math.random() < OP.ENTERTAINMENT_CLOSE_PROBABILITY);
+        if (!closesTab) {
+          return { ok: true, closed: false };
+        }
+        return saveSelectionAndClose(next, {
+          id: crypto.randomUUID(),
+          at: Date.now(),
+          source: "purpose",
+          kind: "purpose",
+          purposeId: purpose.id,
+          optionId: null,
+          optionName: "",
+          note: ""
+        }, tabId);
+      });
+    });
+  }).catch(function () {
+    return fail();
+  });
+};
+
 OP.handlePurposeSkip = function (message, sender) {
   return enqueue(function () {
     var tabId = tabIdFrom(sender);
@@ -868,6 +918,45 @@ function findRecordSlot(local, session, tabId) {
   }
   return interrupt;
 }
+
+OP.handleInterruptSelect = function (message, sender) {
+  return enqueue(function () {
+    var tabId = tabIdFrom(sender);
+    var optionId = message && typeof message.optionId === "string" ? message.optionId : "";
+    if (tabId === null || !optionId) {
+      return fail();
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      var option = findOption(next.interruptOptions || [], optionId);
+      if (!option || option.closesTab || !Array.isArray(next.records)) {
+        return fail();
+      }
+      return loadSession().then(function (session) {
+        if (!findRecordSlot(local, session, tabId)) {
+          return fail();
+        }
+        var contrast = contrastFor(local, session);
+        if (option.id !== "interrupt-purpose" || !contrast || contrast.name !== "娱乐" ||
+            Math.random() >= OP.ENTERTAINMENT_CLOSE_PROBABILITY) {
+          return { ok: true, closed: false };
+        }
+        return saveSelectionAndClose(next, {
+          id: crypto.randomUUID(),
+          at: Date.now(),
+          source: "interrupt",
+          kind: "option",
+          purposeId: null,
+          optionId: option.id,
+          optionName: option.name,
+          note: ""
+        }, tabId);
+      });
+    });
+  }).catch(function () {
+    return fail();
+  });
+};
 
 OP.handleInterruptCommit = function (message, sender) {
   return enqueue(function () {
@@ -1225,6 +1314,9 @@ handlers[OP.MESSAGE.purposeAdd] = function (message) {
 handlers[OP.MESSAGE.purposeCommit] = function (message, sender) {
   return OP.handlePurposeCommit(message, sender);
 };
+handlers[OP.MESSAGE.purposeSelect] = function (message, sender) {
+  return OP.handlePurposeSelect(message, sender);
+};
 handlers[OP.MESSAGE.purposeSkip] = function (message, sender) {
   return OP.handlePurposeSkip(message, sender);
 };
@@ -1248,6 +1340,9 @@ handlers[OP.MESSAGE.optionDelete] = function (message) {
 };
 handlers[OP.MESSAGE.interruptCommit] = function (message, sender) {
   return OP.handleInterruptCommit(message, sender);
+};
+handlers[OP.MESSAGE.interruptSelect] = function (message, sender) {
+  return OP.handleInterruptSelect(message, sender);
 };
 handlers[OP.MESSAGE.interruptDismiss] = function (message, sender) {
   return OP.handleInterruptDismiss(message, sender);
