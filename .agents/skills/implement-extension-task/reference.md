@@ -19,7 +19,7 @@
 | 项 | 值 |
 | --- | --- |
 | 本地键／会话键 | `localState`／`sessionState` |
-| 结构版本 | `5` |
+| 结构版本 | `6` |
 | 闹钟 | `timer-due`、`snooze-end` |
 | 两个间隔的初始值 | 都为 `3` 分钟 |
 | 名称上限 | 去首尾空白后 200；当前实现按 JS 字符串 `length` 校验 |
@@ -31,12 +31,13 @@
 
 ## 数据与展示
 
-- 初始目的顺序：学习、游戏攻略、追番、健身、生活经验、关注更新、其他、无意识打开、游戏资讯、娱乐。前七项 id 为 `purpose-seed-1` 至 `purpose-seed-7`；「无意识打开」为 `purpose-seed-10`、order 8；「游戏资讯」「娱乐」仍用 `purpose-seed-8`、`purpose-seed-9`，order 9、10。
-- 初始打断项前三项为 `interrupt-purpose`（目的）、`interrupt-other`（其他）、`interrupt-close-tab`（关闭当前标签页），都锁定；只有最后一项 `closesTab: true`。其后 `interrupt-seed-1` 至 `interrupt-seed-5` 依次为节奏对立视频、意义不明的短视频、游戏短视频、搞笑视频、看评论区，不锁定且不关闭标签页。
+- 初始目的存储顺序：学习、游戏攻略、追番、健身、生活经验、关注更新、其他、无意识打开、网络测试、游戏资讯、娱乐、技术、科普。前七项 id 为 `purpose-seed-1` 至 `purpose-seed-7`；其后 id 依次为 `purpose-seed-10`、`purpose-seed-13`、`purpose-seed-8`、`purpose-seed-9`、`purpose-seed-11`、`purpose-seed-12`，order 连续为 8 至 13。
+- 初始打断项前三项为 `interrupt-purpose`（目的）、`interrupt-other`（其他）、`interrupt-close-tab`（关闭当前标签页），都锁定；只有最后一项 `closesTab: true`。其后 `interrupt-seed-1` 至 `interrupt-seed-9` 依次为节奏对立视频、意义不明的短视频、游戏短视频、搞笑视频、看评论区、电影解说、技术、鸡汤、家访，不锁定且不关闭标签页。
 - 新安装才播种。旧数据按 `OP.migrateLocalState` 与设计第 4.1 节迁移，完成后不重复补回用户删除的项。版本低于 2 时允许把旧默认值 5 改为 3；其后的列表迁移不能重置分钟数。
+- 版本低于 6 时，按 id 或名称去重补充本次三个目的、四个打断项；「网络测试」移到名称为「无意识打开」的第一项之后，没有该名称时放末尾，不恢复旧删除项。其余字段和已有项相对顺序保留。
 - 初始 `snooze.until`、按钮两个 ratio 为 `null`，`records` 为 `[]`，`purposeSnapshots` 为 `{}`。空会话用 `OP.createEmptySessionState()`，不自行构造缺字段的替代版本。
 - 名称、分钟校验复用 `OP.normalizeName`、`OP.parseMinutes`。记录展示用 `OP.choiceLabel`、`OP.purposeContrast`、`OP.presentRecords`；目的改名影响旧记录显示，删除通过快照保留名字，打断选项名称按写入时快照展示。
-- 目的询问把名称为「其他」「无意识打开」的项按这个顺序固定在顶部；打断窗口固定「目的」「其他」。同名项和其余项保持 `order` 顺序。此规则只影响窗口显示，不能改存储顺序；弹出页按 `order`。
+- 目的询问把名称为「其他」「无意识打开」「网络测试」的项按这个顺序固定在顶部；打断窗口固定「目的」「其他」。目的询问及弹出页均用 `OP.sortPurposes` 将当前名称为「娱乐」的目的放在末尾，新增目的仍在它前面；同名项和其余项按 `order`。显示排序不能改写存储顺序，打断选项不采用目的的末尾规则。
 - 记录和统计在日志页：范围为「本月」「近30天」，记录列表仍显示全部记录。饼图低频合并用「较少出现」，重名时用「更少出现」，不用「其他」替代。
 - 时间按本机时区展示：记录到秒 `YYYY-MM-DD HH:mm:ss`，按钮 `HH:mm`，截止日期 `YYYY-MM-DD HH:mm`。后台仍以时间戳处理状态。
 

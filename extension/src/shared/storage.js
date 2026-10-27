@@ -46,8 +46,11 @@ OP.createInitialLocalState = function () {
       { id: "purpose-seed-6", name: "关注更新", order: 6 },
       { id: "purpose-seed-7", name: "其他", order: 7 },
       { id: "purpose-seed-10", name: "无意识打开", order: 8 },
-      { id: "purpose-seed-8", name: "游戏资讯", order: 9 },
-      { id: "purpose-seed-9", name: "娱乐", order: 10 }
+      { id: "purpose-seed-13", name: "网络测试", order: 9 },
+      { id: "purpose-seed-8", name: "游戏资讯", order: 10 },
+      { id: "purpose-seed-9", name: "娱乐", order: 11 },
+      { id: "purpose-seed-11", name: "技术", order: 12 },
+      { id: "purpose-seed-12", name: "科普", order: 13 }
     ],
     interruptOptions: [
       { id: "interrupt-purpose", name: "目的", order: 1, locked: true, closesTab: false },
@@ -57,7 +60,11 @@ OP.createInitialLocalState = function () {
       { id: "interrupt-seed-2", name: "意义不明的短视频", order: 5, locked: false, closesTab: false },
       { id: "interrupt-seed-3", name: "游戏短视频", order: 6, locked: false, closesTab: false },
       { id: "interrupt-seed-4", name: "搞笑视频", order: 7, locked: false, closesTab: false },
-      { id: "interrupt-seed-5", name: "看评论区", order: 8, locked: false, closesTab: false }
+      { id: "interrupt-seed-5", name: "看评论区", order: 8, locked: false, closesTab: false },
+      { id: "interrupt-seed-6", name: "电影解说", order: 9, locked: false, closesTab: false },
+      { id: "interrupt-seed-7", name: "技术", order: 10, locked: false, closesTab: false },
+      { id: "interrupt-seed-8", name: "鸡汤", order: 11, locked: false, closesTab: false },
+      { id: "interrupt-seed-9", name: "家访", order: 12, locked: false, closesTab: false }
     ],
     settings: {
       firstIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES,
@@ -197,6 +204,30 @@ function hasIdOrName(items, id, name) {
   });
 }
 
+function placeNetworkTestAfterUnconscious(purposes) {
+  var target = purposes.find(function (item) {
+    return item.id === "purpose-seed-13";
+  }) || findFirstByName(purposes, "网络测试");
+  var others = purposes.filter(function (item) {
+    return item !== target;
+  });
+  var anchor = findFirstByName(others, "无意识打开");
+  if (!anchor) {
+    target.order = highestOrder(others) + 1;
+    return;
+  }
+  var insertAt = anchor.order + 1;
+  if (target.order === insertAt) {
+    return;
+  }
+  others.forEach(function (item) {
+    if (typeof item.order === "number" && item.order >= insertAt) {
+      item.order += 1;
+    }
+  });
+  target.order = insertAt;
+}
+
 OP.migrateLocalState = function (current) {
   var next = JSON.parse(JSON.stringify(current));
   var changed = false;
@@ -294,6 +325,47 @@ OP.migrateLocalState = function (current) {
       changed = true;
     });
     next.schemaVersion = 5;
+    changed = true;
+    version = 5;
+  }
+  if (version < 6) {
+    if (!Array.isArray(next.purposes)) {
+      next.purposes = [];
+    }
+    if (!Array.isArray(next.interruptOptions)) {
+      next.interruptOptions = [];
+    }
+    [
+      { id: "purpose-seed-11", name: "技术" },
+      { id: "purpose-seed-12", name: "科普" },
+      { id: "purpose-seed-13", name: "网络测试" }
+    ].forEach(function (seed) {
+      if (!hasIdOrName(next.purposes, seed.id, seed.name)) {
+        next.purposes.push({
+          id: seed.id,
+          name: seed.name,
+          order: highestOrder(next.purposes) + 1
+        });
+      }
+    });
+    placeNetworkTestAfterUnconscious(next.purposes);
+    [
+      { id: "interrupt-seed-6", name: "电影解说" },
+      { id: "interrupt-seed-7", name: "技术" },
+      { id: "interrupt-seed-8", name: "鸡汤" },
+      { id: "interrupt-seed-9", name: "家访" }
+    ].forEach(function (seed) {
+      if (!hasIdOrName(next.interruptOptions, seed.id, seed.name)) {
+        next.interruptOptions.push({
+          id: seed.id,
+          name: seed.name,
+          order: highestOrder(next.interruptOptions) + 1,
+          locked: false,
+          closesTab: false
+        });
+      }
+    });
+    next.schemaVersion = 6;
     changed = true;
   }
   return { state: next, changed: changed };

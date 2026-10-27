@@ -471,11 +471,11 @@ function renderList() {
   }
   var draft = view.note;
   var selected = view.selectedId;
-  var groups = splitPinned(view.purposes, ["其他", "无意识打开"]);
+  var groups = splitPinned(view.purposes, ["其他", "无意识打开", "网络测试"]);
   pinList.replaceChildren();
   restList.replaceChildren();
   renderPurposeItems(pinList, groups.pinned, draft, selected);
-  renderPurposeItems(restList, groups.rest, draft, selected);
+  renderPurposeItems(restList, OP.sortPurposes(groups.rest), draft, selected);
 }
 
 function commitPurpose(purposeId) {

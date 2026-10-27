@@ -2,7 +2,7 @@ var OP = globalThis.OP || (globalThis.OP = {});
 
 OP.LOCAL_KEY = "localState";
 OP.SESSION_KEY = "sessionState";
-OP.SCHEMA_VERSION = 5;
+OP.SCHEMA_VERSION = 6;
 OP.ALARM_TIMER = "timer-due";
 OP.ALARM_SNOOZE = "snooze-end";
 OP.NAME_LIMIT = 200;
@@ -14,6 +14,17 @@ OP.DRAG_THRESHOLD_PX = 4;
 OP.BUTTON_MARGIN_PX = 24;
 OP.BUTTON_EDGE_PX = 8;
 OP.HOST_Z_INDEX = "2147483646";
+
+OP.sortPurposes = function (purposes) {
+  return (Array.isArray(purposes) ? purposes : []).slice().sort(function (left, right) {
+    var leftLast = left.name === "娱乐";
+    var rightLast = right.name === "娱乐";
+    if (leftLast !== rightLast) {
+      return leftLast ? 1 : -1;
+    }
+    return left.order - right.order;
+  });
+};
 
 OP.MESSAGE = {
   contentReady: "content-ready",

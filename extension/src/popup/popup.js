@@ -108,7 +108,7 @@ function renderOptions(items) {
 function renderPurposes(purposes) {
   var list = document.getElementById("purposes");
   list.replaceChildren();
-  purposes.forEach(function (purpose) {
+  OP.sortPurposes(purposes).forEach(function (purpose) {
     var row = document.createElement("li");
     row.className = "purpose";
     row.setAttribute("data-purpose-id", purpose.id);
