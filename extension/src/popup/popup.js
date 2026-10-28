@@ -2,6 +2,52 @@ var OP = globalThis.OP;
 
 var savedIntervals = { first: null, again: null };
 var intervalPending = { first: false, again: false };
+var blockLoaded = false;
+var blockPending = false;
+var blockDirty = false;
+
+function renderBlockSchedule(schedule) {
+  document.getElementById("block-enabled").checked = schedule.enabled;
+  document.getElementById("block-start").value = schedule.start;
+  document.getElementById("block-end").value = schedule.end;
+  document.getElementById("block-fields").disabled = false;
+  blockLoaded = true;
+  blockDirty = false;
+}
+
+function saveBlockSchedule(event) {
+  event.preventDefault();
+  if (!blockLoaded || blockPending) {
+    return;
+  }
+  var error = document.getElementById("block-error");
+  var status = document.getElementById("block-status");
+  var check = OP.validateBlockSchedule({
+    enabled: document.getElementById("block-enabled").checked,
+    start: document.getElementById("block-start").value,
+    end: document.getElementById("block-end").value
+  });
+  status.textContent = "";
+  if (!check.ok) {
+    showFieldError(error, check.error);
+    return;
+  }
+  hideFieldError(error);
+  blockPending = true;
+  document.getElementById("block-fields").disabled = true;
+  send(OP.MESSAGE.blockSettingsSet, { blockSchedule: check.schedule }).then(function (response) {
+    blockPending = false;
+    document.getElementById("block-fields").disabled = false;
+    if (response.ok || response.saved) {
+      renderBlockSchedule(response.blockSchedule);
+    }
+    if (!response.ok) {
+      showFieldError(error, response.error || OP.COPY.saveFailed);
+      return;
+    }
+    status.textContent = OP.COPY.blockSaved;
+  });
+}
 
 function readName(raw) {
   if (typeof raw !== "string") {
@@ -395,6 +441,9 @@ function addOption(event) {
 }
 
 function render(response) {
+  if (!blockPending && (!blockLoaded || !blockDirty)) {
+    renderBlockSchedule(response.settings.blockSchedule);
+  }
   savedIntervals.first = response.settings.firstIntervalMinutes;
   savedIntervals.again = response.settings.againIntervalMinutes;
   ["first", "again"].forEach(function (kind) {
@@ -420,6 +469,19 @@ function load() {
 }
 
 document.getElementById("first-label").textContent = OP.COPY.firstIntervalLabel;
+[
+  ["block-heading", "blockHeading"], ["block-enable-label", "blockEnable"],
+  ["block-start-label", "blockStart"], ["block-end-label", "blockEnd"],
+  ["block-save", "blockSave"], ["block-hint", "blockTimeHint"]
+].forEach(function (entry) {
+  document.getElementById(entry[0]).textContent = OP.COPY[entry[1]];
+});
+document.getElementById("block-form").addEventListener("submit", saveBlockSchedule);
+document.getElementById("block-form").addEventListener("input", function () {
+  blockDirty = true;
+  document.getElementById("block-status").textContent = "";
+  hideFieldError(document.getElementById("block-error"));
+});
 document.getElementById("again-label").textContent = OP.COPY.againIntervalLabel;
 document.getElementById("view-logs").textContent = OP.COPY.viewLogs;
 document.getElementById("view-logs").addEventListener("click", function () {

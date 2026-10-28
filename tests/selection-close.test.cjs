@@ -35,7 +35,7 @@ function setup(random = 0) {
       }
     }
   });
-  for (const file of ["shared/constants.js", "shared/storage.js", "sites/bilibili.js", "sites/index.js", "background/runtime.js"]) {
+  for (const file of ["shared/constants.js", "shared/time.js", "shared/storage.js", "sites/bilibili.js", "sites/index.js", "background/runtime.js"]) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "../extension/src", file), "utf8"), context);
   }
   const { OP } = context;

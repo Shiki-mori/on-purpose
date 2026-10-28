@@ -2,7 +2,12 @@ var OP = globalThis.OP || (globalThis.OP = {});
 
 OP.LOCAL_KEY = "localState";
 OP.SESSION_KEY = "sessionState";
-OP.SCHEMA_VERSION = 6;
+OP.SCHEMA_VERSION = 7;
+OP.ALARM_BLOCK_BOUNDARY = "block-boundary";
+OP.ALARM_BLOCK_CHECK = "block-check";
+OP.BLOCK_RULE_ID = 1001;
+OP.BLOCK_PAGE = "src/blocked/blocked.html";
+OP.DEFAULT_BLOCK_SCHEDULE = { enabled: true, start: "02:00", end: "07:00" };
 OP.ALARM_TIMER = "timer-due";
 OP.ALARM_SNOOZE = "snooze-end";
 OP.NAME_LIMIT = 200;
@@ -28,6 +33,9 @@ OP.sortPurposes = function (purposes) {
 };
 
 OP.MESSAGE = {
+  blockSettingsSet: "block-settings-set",
+  blockGet: "block-get",
+  blockChanged: "block-changed",
   contentReady: "content-ready",
   purposeAdd: "purpose-add",
   purposeCommit: "purpose-commit",
@@ -51,6 +59,21 @@ OP.MESSAGE = {
 };
 
 OP.COPY = {
+  blockHeading: "定时禁用哔哩哔哩",
+  blockEnable: "启用定时禁用",
+  blockStart: "开始时间",
+  blockEnd: "结束时间",
+  blockSave: "保存禁用设置",
+  blockSaved: "已保存",
+  blockTimeHint: "每天按北京时间（UTC+8）执行，支持跨午夜。",
+  invalidBlockTime: "请选择有效的开始和结束时间",
+  sameBlockTime: "开始时间和结束时间不能相同",
+  blockApplyFailed: "设置已保存，但禁用未完全生效，请重试",
+  blockTitle: "当前时段禁止访问哔哩哔哩",
+  blockAllowed: "当前可以访问哔哩哔哩",
+  blockDisabled: "定时禁用已关闭",
+  blockExplanation: "请在允许访问的时间自行重新打开哔哩哔哩。",
+  blockLoadFailed: "未能读取禁用状态，请刷新重试",
   emptyName: "请输入名称",
   nameTooLong: "名称不能超过 200 个字",
   invalidMinutes: "请输入大于或等于 1 的整数",

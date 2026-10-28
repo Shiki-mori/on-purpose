@@ -56,6 +56,9 @@ function announceReady() {
     if (chrome.runtime.lastError || !response || !response.ok) {
       return;
     }
+    if (response.blocked) {
+      return;
+    }
     if (response.snooze) {
       OP.applySnooze(response.snooze);
     }

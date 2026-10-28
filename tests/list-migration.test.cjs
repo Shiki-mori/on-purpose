@@ -6,7 +6,7 @@ const { test } = require("node:test");
 
 function load() {
   const context = vm.createContext({});
-  for (const file of ["shared/constants.js", "shared/storage.js"]) {
+  for (const file of ["shared/constants.js", "shared/time.js", "shared/storage.js"]) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "../extension/src", file), "utf8"), context);
   }
   return context;
@@ -35,7 +35,7 @@ function previousState(OP) {
 test("新安装包含十三个目的、十二个打断项，固定 id 和锁定规则保持有效", () => {
   const { OP } = load();
   const state = plain(OP.createInitialLocalState());
-  assert.equal(state.schemaVersion, 6);
+  assert.equal(state.schemaVersion, 7);
   assert.deepEqual(names(state.purposes), ["学习", "游戏攻略", "追番", "健身", "生活经验", "关注更新", "其他", "无意识打开", "网络测试", "游戏资讯", "娱乐", "技术", "科普"]);
   assert.deepEqual(names(state.interruptOptions), ["目的", "其他", "关闭当前标签页", "节奏对立视频", "意义不明的短视频", "游戏短视频", "搞笑视频", "看评论区", "电影解说", "技术", "鸡汤", "家访"]);
   assert.deepEqual(state.interruptOptions.filter(item => item.locked).map(item => item.id), ["interrupt-purpose", "interrupt-other", "interrupt-close-tab"]);
@@ -55,8 +55,9 @@ test("版本 5 升级保留用户数据、原有项相对顺序及旧记录引�
   const { state, changed } = plain(OP.migrateLocalState(before));
   assert.equal(changed, true);
   assert.deepEqual(before, copy);
-  assert.equal(state.schemaVersion, 6);
-  for (const key of ["settings", "snooze", "snoozeButton", "records", "purposeSnapshots"]) {
+  assert.equal(state.schemaVersion, 7);
+  assert.deepEqual(state.settings, { ...before.settings, blockSchedule: plain(OP.DEFAULT_BLOCK_SCHEDULE) });
+  for (const key of ["snooze", "snoozeButton", "records", "purposeSnapshots"]) {
     assert.deepEqual(state[key], before[key]);
   }
   assert.deepEqual(sorted(state.purposes).filter(item => !newPurposeIds.includes(item.id)).map(item => item.id), sorted(before.purposes).map(item => item.id));
@@ -114,7 +115,7 @@ test("迁移仅执行一次，升级后删除或改名新项再重载不会重�
   assert.deepEqual(again.state, state);
 });
 
-test("旧版本 1 至 4 仍串行迁移到 6，默认间隔只在版本 2 的历史阶段修改", () => {
+test("旧版本 1 至 4 仍串行迁移到 7，默认间隔只在版本 2 的历史阶段修改", () => {
   const { OP } = load();
   for (const version of [1, 2, 3, 4]) {
     const before = previousState(OP);
@@ -122,7 +123,7 @@ test("旧版本 1 至 4 仍串行迁移到 6，默认间隔只在版本 2 的历
     if (version < 4) before.purposes = before.purposes.filter(item => item.id !== "purpose-seed-10");
     before.interruptOptions = before.interruptOptions.filter(item => !/^interrupt-seed-/.test(item.id));
     const { state } = plain(OP.migrateLocalState(before));
-    assert.equal(state.schemaVersion, 6);
+    assert.equal(state.schemaVersion, 7);
     assert.equal(state.interruptOptions.length, 12);
     assert.equal(state.settings.firstIntervalMinutes, version < 2 ? 3 : 5);
     assert.equal(state.settings.againIntervalMinutes, 17);
@@ -150,7 +151,7 @@ test("存储写入失败后能重试；并发初始化只执行一次读写", as
   const results = await Promise.all([OP.ensureLocalState(), OP.ensureLocalState()]);
   assert.equal(reads, 2);
   assert.equal(writes, 2);
-  assert.equal(results[0].schemaVersion, 6);
+  assert.equal(results[0].schemaVersion, 7);
   assert.deepEqual(plain(results[0]), plain(results[1]));
   await OP.ensureLocalState();
   assert.equal(writes, 2);

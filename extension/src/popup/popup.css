@@ -4,6 +4,55 @@ body {
   max-height: 560px;
 }
 
+#block-fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.block-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.block-toggle input {
+  accent-color: var(--op-accent);
+  margin: 0;
+}
+
+.block-times {
+  display: flex;
+  gap: 12px;
+}
+
+.block-times label {
+  flex: 1;
+  min-width: 0;
+}
+
+.block-times span {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.block-times input {
+  width: 100%;
+}
+
+.hint {
+  color: var(--op-muted);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+#block-save {
+  margin-top: 10px;
+  padding: 6px 10px;
+}
+
 body {
   overflow: auto;
 }

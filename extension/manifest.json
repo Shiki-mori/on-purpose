@@ -3,7 +3,7 @@
   "name": "On Purpose",
   "version": "0.1.0",
   "description": "在哔哩哔哩上询问目的并到时打断",
-  "permissions": ["storage", "alarms", "tabs"],
+  "permissions": ["storage", "alarms", "tabs", "declarativeNetRequestWithHostAccess"],
   "host_permissions": [
     "https://*.bilibili.com/*",
     "https://bilibili.com/*"
@@ -40,7 +40,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/shared/theme.css"],
+      "resources": ["src/shared/theme.css", "src/blocked/blocked.html"],
       "matches": [
         "https://*.bilibili.com/*",
         "https://bilibili.com/*"

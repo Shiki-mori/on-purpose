@@ -400,10 +400,7 @@ OP.handlePopupGet = function () {
         ok: true,
         purposes: copyList(local.purposes),
         interruptOptions: copyList(local.interruptOptions),
-        settings: {
-          firstIntervalMinutes: local.settings.firstIntervalMinutes,
-          againIntervalMinutes: local.settings.againIntervalMinutes
-        },
+        settings: settingsFrom(local),
         records: OP.presentRecords(local)
       };
     });
@@ -632,8 +629,177 @@ function saveOptions(next) {
 function settingsFrom(local) {
   return {
     firstIntervalMinutes: local.settings.firstIntervalMinutes,
-    againIntervalMinutes: local.settings.againIntervalMinutes
+    againIntervalMinutes: local.settings.againIntervalMinutes,
+    blockSchedule: OP.blockScheduleState(local.settings.blockSchedule).schedule
   };
+}
+
+function blockState(local) {
+  return OP.blockScheduleState(local.settings.blockSchedule);
+}
+
+function blockPageUrl() {
+  return chrome.runtime.getURL(OP.BLOCK_PAGE);
+}
+
+function blockApiCall(object, method, args) {
+  return new Promise(function (resolve, reject) {
+    object[method].apply(object, args.concat(function (result) {
+      var error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+      } else {
+        resolve(result);
+      }
+    }));
+  });
+}
+
+function syncBlockRules(state) {
+  var desired = state.active ? {
+    id: OP.BLOCK_RULE_ID,
+    priority: 1,
+    action: { type: "redirect", redirect: { extensionPath: "/" + OP.BLOCK_PAGE } },
+    condition: OP.sites.bilibili.blockNavigationCondition()
+  } : null;
+  return blockApiCall(chrome.declarativeNetRequest, "getDynamicRules", []).then(function (rules) {
+    var current = rules.find(function (rule) { return rule.id === OP.BLOCK_RULE_ID; });
+    // Chrome may return object keys in a different order. Compare fields explicitly.
+    if ((!desired && !current) || (desired && current && current.priority === desired.priority &&
+        current.action.type === "redirect" && current.action.redirect &&
+        current.action.redirect.extensionPath === desired.action.redirect.extensionPath &&
+        current.condition.regexFilter === desired.condition.regexFilter &&
+        current.condition.isUrlFilterCaseSensitive === false &&
+        JSON.stringify(current.condition.resourceTypes) === '["main_frame"]' &&
+        Object.keys(current.condition).length === 3)) {
+      return;
+    }
+    return blockApiCall(chrome.declarativeNetRequest, "updateDynamicRules", [{
+      removeRuleIds: [OP.BLOCK_RULE_ID], addRules: desired ? [desired] : []
+    }]);
+  });
+}
+
+function syncBlockAlarms(state) {
+  if (!state.schedule.enabled) {
+    return Promise.all([
+      blockApiCall(chrome.alarms, "clear", [OP.ALARM_BLOCK_BOUNDARY]),
+      blockApiCall(chrome.alarms, "clear", [OP.ALARM_BLOCK_CHECK])
+    ]);
+  }
+  return blockApiCall(chrome.alarms, "get", [OP.ALARM_BLOCK_BOUNDARY]).then(function (alarm) {
+    if (!alarm || Math.abs(alarm.scheduledTime - state.nextBoundary) > 1) {
+      return blockApiCall(chrome.alarms, "create", [OP.ALARM_BLOCK_BOUNDARY, { when: state.nextBoundary }]);
+    }
+  }).then(function () {
+    return blockApiCall(chrome.alarms, "get", [OP.ALARM_BLOCK_CHECK]);
+  }).then(function (alarm) {
+    if (!alarm || alarm.periodInMinutes !== 1) {
+      return blockApiCall(chrome.alarms, "create", [OP.ALARM_BLOCK_CHECK, { periodInMinutes: 1 }]);
+    }
+  });
+}
+
+function redirectBlockedTabs() {
+  return queryTabs().then(function (tabs) {
+    return Promise.all(tabs.filter(function (tab) {
+      return typeof tab.id === "number" && OP.findSite(tab.pendingUrl || tab.url);
+    }).map(function (tab) {
+      // A tab may close or navigate elsewhere while the query is in flight.
+      return blockApiCall(chrome.tabs, "get", [tab.id]).catch(function (error) {
+        if (/No tab with id|Invalid tab ID/i.test(error.message)) {
+          return null;
+        }
+        throw error;
+      }).then(function (current) {
+        if (current && OP.findSite(current.pendingUrl || current.url)) {
+          return blockApiCall(chrome.tabs, "update", [current.id, { url: blockPageUrl() }]);
+        }
+      }).then(function () { return true; }, function () { return false; });
+    }));
+  }).then(function (results) {
+    if (results.some(function (ok) { return !ok; })) {
+      throw new Error("block navigation");
+    }
+  });
+}
+
+function applyBlockSchedule(local) {
+  var state = blockState(local);
+  // Do not let one failed API prevent other tabs or the fallback navigation from being handled.
+  return Promise.allSettled([
+    syncBlockRules(state),
+    syncBlockAlarms(state),
+    state.active ? clearRound() : Promise.resolve(),
+    state.active ? redirectBlockedTabs() : Promise.resolve()
+  ]).then(function (results) {
+    if (results.some(function (result) { return result.status === "rejected"; })) {
+      throw new Error("block apply");
+    }
+    return state;
+  });
+}
+
+function notifyBlockChanged() {
+  chrome.runtime.sendMessage({ type: OP.MESSAGE.blockChanged }, function () {
+    void chrome.runtime.lastError;
+  });
+}
+
+OP.reconcileBlock = function () {
+  return enqueue(function () {
+    return OP.ensureLocalState().then(applyBlockSchedule).then(function () {
+      notifyBlockChanged();
+    });
+  }).catch(function () {
+    console.warn("On Purpose: 未能完全应用定时禁用，将在后续核对时重试");
+  });
+};
+
+OP.handleBlockGet = function () {
+  return enqueue(function () {
+    return OP.ensureLocalState().then(applyBlockSchedule).then(function (state) {
+      return { ok: true, block: state };
+    });
+  }).catch(function () { return fail(OP.COPY.blockLoadFailed); });
+};
+
+OP.handleBlockSettingsSet = function (message) {
+  return enqueue(function () {
+    var check = OP.validateBlockSchedule(message && message.blockSchedule);
+    if (!check.ok) {
+      return fail(check.error);
+    }
+    return OP.ensureLocalState().then(function (local) {
+      var next = cloneState(local);
+      next.settings.blockSchedule = check.schedule;
+      return OP.writeLocal(next).then(function () {
+        return applyBlockSchedule(next).then(function () {
+          notifyBlockChanged();
+          return { ok: true, blockSchedule: check.schedule };
+        }).catch(function () {
+          notifyBlockChanged();
+          return { ok: false, saved: true, blockSchedule: check.schedule, error: OP.COPY.blockApplyFailed };
+        });
+      });
+    });
+  }).catch(function () { return fail(); });
+};
+
+function guardBlockedContent(sender) {
+  if (!sender || !sender.tab || !OP.findSite(sender.url || sender.tab.url)) {
+    return Promise.resolve(null);
+  }
+  return enqueue(function () {
+    return OP.ensureLocalState().then(function (local) {
+      if (!blockState(local).active) {
+        return null;
+      }
+      return applyBlockSchedule(local).then(function () {
+        return { ok: true, blocked: true, showPurpose: false, showInterrupt: false };
+      });
+    });
+  });
 }
 
 OP.handleSettingsSet = function (message) {
@@ -1075,6 +1241,9 @@ OP.handleTimerAlarm = function (alarm) {
         return clearTimerAlarm();
       }
       return OP.ensureLocalState().then(function (local) {
+        if (blockState(local).active) {
+          return applyBlockSchedule(local);
+        }
         if (snoozeIsActive(local)) {
           idleTimerFields(session);
           return OP.writeSession(session).then(function () {
@@ -1110,6 +1279,9 @@ OP.reconcileTimer = function () {
         return clearTimerAlarm();
       }
       return OP.ensureLocalState().then(function (local) {
+        if (blockState(local).active) {
+          return applyBlockSchedule(local);
+        }
         var minutes = intervalMinutes(local, stored.timer.intervalKind);
         if (typeof minutes !== "number") {
           return clearTimerAlarm();
@@ -1239,6 +1411,9 @@ OP.handleSnoozeAlarm = function (alarm) {
   }
   return enqueue(function () {
     return OP.ensureLocalState().then(function (local) {
+      if (blockState(local).active) {
+        return applyBlockSchedule(local);
+      }
       var until = local && local.snooze ? local.snooze.until : null;
       if (typeof until === "number" && until > Date.now() + 250) {
         return setSnoozeAlarm(until);
@@ -1302,6 +1477,15 @@ OP.reconcileSnooze = function () {
 };
 
 var handlers = {};
+handlers[OP.MESSAGE.blockSettingsSet] = function (message, sender) {
+  if (!sender || sender.url !== chrome.runtime.getURL("src/popup/popup.html")) {
+    return Promise.resolve(fail());
+  }
+  return OP.handleBlockSettingsSet(message);
+};
+handlers[OP.MESSAGE.blockGet] = function () {
+  return OP.handleBlockGet();
+};
 handlers[OP.MESSAGE.popupGet] = function () {
   return OP.handlePopupGet();
 };
@@ -1361,7 +1545,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   if (!message || typeof message.type !== "string" || !handlers[message.type]) {
     return false;
   }
-  handlers[message.type](message, sender).then(sendResponse, function () {
+  guardBlockedContent(sender).then(function (blocked) {
+    return blocked || handlers[message.type](message, sender);
+  }).then(sendResponse, function () {
     sendResponse(fail());
   });
   return true;

@@ -3,8 +3,8 @@
 | 项 | 内容 |
 | --- | --- |
 | 文档状态 | 已确认 |
-| 版本 | 0.11 |
-| 日期 | 2026-10-27 |
+| 版本 | 0.12 |
+| 日期 | 2026-10-28 |
 | 依据 | [需求说明书](<../Requirements Specification/Requirements Specification.md>) 0.10、[background-完善.md](../background.md/background-完善.md) 第 6 节 |
 
 本文说明扩展如何拆开、数据放在哪里、计时在哪里走、界面如何进到哔哩哔哩页面，以及以后加一个网站要改哪里。需求已经确定的行为不再重开讨论。D-1、D-2、D-3 已确认，并写入正文。第 10 节只保留确认记录。
@@ -23,13 +23,15 @@
 | 0.10 | 2026-10-27 | 结构版本 6 补充三个目的、四个打断选项。「网络测试」排在「无意识打开」之后，询问窗口固定显示顺序同步调整；目的询问及弹出页都把名称为「娱乐」的目的固定在末尾，只改显示排序。已有数据按 id 或名称去重，迁移仅执行一次。 |
 | 0.11 | 2026-10-27 | 新增目的及打断选项点击消息，由服务工作线程判定必关／60% 概率关闭；未命中仍走备注确认。复用全局最近目的对照和现有记录结构，关闭成功后的状态由标签页移除事件处理。 |
 
+| 0.12 | 2026-10-28 | 每日定时禁用：结构版本 7 增加设置，服务工作线程维护声明式导航重定向规则、边界及巡检闹钟，到点切换现有标签页，新增无原地址的本地提示页。 |
+
 ## 1. 运行形态
 
 采用在 Chrome 中以开发者模式加载的扩展，清单版本为 Manifest V3。不打包，不上架。安装时加载仓库里的 `extension/` 目录；改完代码后在 `chrome://extensions` 重新加载。
 
 不使用篡改猴脚本、书签脚本或本地代理。理由已在背景第 6 节写明：要同时满足「休眠仍按实际时间计时、退出浏览器或关掉全部哔哩哔哩标签页后计时清零」和「按钮关掉当前标签页，包括窗口里的最后一个标签页」。
 
-扩展不修改哔哩哔哩的网络响应，不加广告拦截规则，也不把目的、备注、回答或设置发到网络。
+扩展不修改哔哩哔哩的网络响应，不加广告拦截规则，也不把目的、备注、回答或设置发到网络。定时禁用仅将匹配的顶层导航重定向到扩展本地提示页。
 
 ## 2. 总体结构
 
@@ -94,7 +96,7 @@ extension/
 | --- | --- |
 | `manifest_version` | `3` |
 | `name` | On Purpose |
-| `permissions` | `storage`、`alarms`、`tabs` |
+| `permissions` | `storage`、`alarms`、`tabs`、`declarativeNetRequestWithHostAccess` |
 | `host_permissions` | `https://*.bilibili.com/*`、`https://bilibili.com/*` |
 | `background.service_worker` | `src/background/service-worker.js` |
 | `action.default_popup` | `src/popup/popup.html` |
@@ -115,17 +117,18 @@ extension/
 
 | 字段 | 含义 |
 | --- | --- |
-| `schemaVersion` | 数字。当前为 `6`。以后改字段时在服务工作线程里迁移 |
+| `schemaVersion` | 数字。当前为 `7`。以后改字段时在服务工作线程里迁移 |
 | `purposes` | 目的数组。每项有 `id`、`name`、`order` |
 | `interruptOptions` | 打断选项数组。每项有 `id`、`name`、`order`、`locked`、`closesTab` |
 | `settings.firstIntervalMinutes` | 首次打断间隔，初始 `3` |
 | `settings.againIntervalMinutes` | 再次打断间隔，初始 `3` |
+| `settings.blockSchedule` | `{ enabled: true, start: "02:00", end: "07:00" }`，每天北京时间的禁用设置 |
 | `snooze.until` | 暂时关闭的截止时间，毫秒时间戳。未启用时为 `null` |
 | `snoozeButton.xRatio` / `yRatio` | 按钮在视口中的相对位置，`0` 到 `1`。尚未拖动时为 `null`，界面用右下角默认位置 |
 | `records` | 只追加的记录数组 |
 | `purposeSnapshots` | 对象。目的被删除时，把当时的名称记在 `purposeSnapshots[id]` |
 
-新安装、本地还没有 `localState` 时写入初始值，结构版本为 `6`。已有数据按版本逐级迁移，不覆盖已经改过的分钟数。
+新安装、本地还没有 `localState` 时写入初始值，结构版本为 `7`。已有数据按版本逐级迁移，不覆盖已经改过的分钟数。低于 `7` 时仅补上缺失的 `settings.blockSchedule` 并升到 `7`，不覆盖已有合法禁用设置、列表、记录或其他字段。
 
 低于 `2` 时：补上缺少的「游戏资讯」「娱乐」，以及锁定的打断选项「目的」；两个间隔里仍等于旧默认值 `5` 的那一处改为 `3`。已经改过的名称、已经删除的项、以及不是 `5` 的分钟数保持不变。若当时已经有名为「目的」的打断选项，或已经有同名目的，则不另加一项。完成后写入 `schemaVersion` `2`。
 
@@ -483,9 +486,24 @@ extension/
 | FR-3 暂时关闭 | 第 5.3 节、第 6.5 节 |
 | FR-4 复盘 | 第 4.1 节、第 7 节、第 7.1 节 |
 | FR-5 列表与设置 | 第 4 节、第 7 节 |
+| FR-6 定时禁用 | 第 14 节 |
 | C-1、C-2 加载方式与重新加载后计时清零 | 第 1 节、第 4.2 节 |
 | C-4 数据不离开本机 | 第 1 节 |
 | C-5 站点配置与流程分开 | 第 9 节 |
 | C-6 深色主题 | 第 6.1 节、第 7.1 节 |
 | 背景里的 `chrome.storage.session`、`chrome.storage.local`、`chrome.alarms`、`chrome.tabs.remove` | 第 2 节、第 4 节、第 5 节、第 6.3 节 |
 | D-1 至 D-3 | 第 10 节 |
+
+## 14. 每日定时禁用
+
+- 设置在弹出页最上方，开关与两个 `type="time"` 输入一起通过保存按钮提交 `block-settings-set`；复用 constants、time、popup 经典脚本。后台校验布尔类型、严格 HH:mm 及起止不同。只修改 `settings.blockSchedule`，不影响间隔等字段。默认开启 02:00–07:00。
+- `time.js` 以 `Date.now()` 与 UTC+8 计算当前分钟、跨午夜区间及下一次边界，不受电脑时区影响。左闭右开，不支持相同起止。
+- 服务工作线程仍按 constants、time、storage、bilibili、index、runtime 顺序加载。具体禁用处理放在 runtime，复用同一串行队列。站点模块定义声明式导航条件，普通标签页仍通过 `OP.findSite` 识别，不增加其他域名权限。
+- `declarativeNetRequestWithHostAccess` 结合原有 B 站 host 权限，管理一个固定 id 的动态规则；只匹配 HTTPS B 站顶层 `main_frame`，固定重定向到 `/src/blocked/blocked.html`。此 HTML 在 B 站范围声明为 web accessible，不在 URL、规则或存储中带原地址。每次核对读取真实规则，只有发生差异才更新；禁用外删除该规则。
+- 保存成功、工作线程启动、`runtime.onStartup`、`onInstalled`、相关 `tabs.onUpdated`、标签页激活、窗口聚焦、`block-boundary`、`block-check` 触发核对。`block-boundary` 定在下个起止点，`block-check` 每分钟核对；关闭功能清除两者。Chrome 闹钟延迟及唤醒时以当前时间为准。
+- 禁用生效时清空 session 和共用计时闹钟，然后查询匹配标签页；更新前用 `tabs.get` 重新确认当前或待导航地址仍匹配，再 `tabs.update` 到无参数的本地提示页。已关闭或已经离开 B 站的页跳过，其他页失败不妨碍继续处理。既有的暂时关闭截止时间和历史记录保留。页面被切换后停止原页面播放。
+- 内容脚本消息在执行原处理器之前经后台串行检查：禁用中重新应用规则、切换标签页并拒绝原操作，不新增记录，不开始轮次；计时和暂时关闭闹钟也先检查禁用。`content-ready` 回复 `blocked: true` 时内容脚本不画既有界面。
+- 提示页通过 constants、blocked.js 经典脚本加载，只发送 `block-get` 读取开关、时段和当前状态，不能读写 storage。加载、聚焦、重新可见及后台 `block-changed` 通知时刷新。显示「当前时段禁止访问哔哩哔哩」或「当前可以访问哔哩哔哩」，以及每日北京时间时段；不保存地址、不提供返回入口、不自动导航。页面采用共享深色主题。
+- 保存先写 local，再同步规则、闹钟和标签页；写入失败返回普通保存错误。应用失败返回 `saved: true`、已保存设置及专用错误，弹出页保留真实保存值并允许重试。后续核对重试，启动核对失败在后台记录不含用户数据的错误。提示页查询失败时显示错误，不凭空显示允许访问。
+
+新增消息：`block-settings-set`（弹出页 → 后台，提交完整设置）、`block-get`（提示页 → 后台，核对并取当前状态）、`block-changed`（后台 → 扩展页，刷新状态）。弹出页 `popup-get` 的 settings 增加 blockSchedule。新增文件为 `src/blocked/blocked.html`、`blocked.css`、`blocked.js`；不接入日志统计。

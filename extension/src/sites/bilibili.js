@@ -18,6 +18,13 @@ function isBilibiliHost(hostname) {
 OP.sites.bilibili = {
   id: "bilibili",
   entry: "all",
+  blockNavigationCondition: function () {
+    return {
+      regexFilter: "^https://([a-z0-9-]+\\.)*bilibili\\.com(?::[0-9]+)?/",
+      isUrlFilterCaseSensitive: false,
+      resourceTypes: ["main_frame"]
+    };
+  },
   matches: function (url) {
     var parsed = readUrl(url);
     return Boolean(parsed && parsed.protocol === "https:" && isBilibiliHost(parsed.hostname));

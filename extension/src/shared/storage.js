@@ -68,7 +68,8 @@ OP.createInitialLocalState = function () {
     ],
     settings: {
       firstIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES,
-      againIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES
+      againIntervalMinutes: OP.DEFAULT_INTERVAL_MINUTES,
+      blockSchedule: Object.assign({}, OP.DEFAULT_BLOCK_SCHEDULE)
     },
     snooze: { until: null },
     snoozeButton: { xRatio: null, yRatio: null },
@@ -366,6 +367,16 @@ OP.migrateLocalState = function (current) {
       }
     });
     next.schemaVersion = 6;
+    changed = true;
+  }
+  if (version < 7) {
+    if (!next.settings || typeof next.settings !== "object") {
+      next.settings = {};
+    }
+    if (!OP.validateBlockSchedule(next.settings.blockSchedule).ok) {
+      next.settings.blockSchedule = Object.assign({}, OP.DEFAULT_BLOCK_SCHEDULE);
+    }
+    next.schemaVersion = 7;
     changed = true;
   }
   return { state: next, changed: changed };

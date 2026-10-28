@@ -8,6 +8,22 @@
   </head>
   <body>
     <main>
+      <section aria-labelledby="block-heading">
+        <h2 id="block-heading"></h2>
+        <form id="block-form">
+          <fieldset id="block-fields" disabled>
+            <label class="block-toggle"><input id="block-enabled" type="checkbox"><span id="block-enable-label"></span></label>
+            <div class="block-times">
+              <label><span id="block-start-label"></span><input id="block-start" type="time" step="60" required></label>
+              <label><span id="block-end-label"></span><input id="block-end" type="time" step="60" required></label>
+            </div>
+            <p id="block-hint" class="hint"></p>
+            <button id="block-save" type="submit" class="primary"></button>
+          </fieldset>
+          <p id="block-status" class="hint" role="status"></p>
+          <p id="block-error" class="row-error" role="alert" hidden></p>
+        </form>
+      </section>
       <section>
         <h2>间隔</h2>
         <div class="interval">
